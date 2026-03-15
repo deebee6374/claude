@@ -1,0 +1,1768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance Tracker</title>
+<style>
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #273549;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --primary: #3b82f6;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --purple: #8b5cf6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+a { color: var(--primary); text-decoration: none; }
+input, select, textarea { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: 6px; font-size: 14px; width: 100%; outline: none; transition: border-color .2s; }
+input:focus, select:focus, textarea:focus { border-color: var(--primary); }
+input[type="color"] { padding: 2px; height: 36px; cursor: pointer; }
+input[type="checkbox"] { width: auto; cursor: pointer; }
+textarea { resize: vertical; min-height: 60px; }
+button { cursor: pointer; border: none; border-radius: 6px; padding: 8px 16px; font-size: 14px; font-weight: 500; transition: opacity .2s, transform .1s; }
+button:hover { opacity: .85; }
+button:active { transform: scale(.97); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-success { background: var(--success); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-warning { background: var(--warning); color: #000; }
+.btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { padding: 6px 8px; font-size: 13px; background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+/* Layout */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 100; }
+header h1 { font-size: 18px; font-weight: 700; color: var(--primary); }
+.header-actions { display: flex; gap: 8px; }
+nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 0; overflow-x: auto; }
+.nav-tab { padding: 14px 18px; color: var(--muted); cursor: pointer; border-bottom: 3px solid transparent; font-weight: 500; white-space: nowrap; transition: color .2s, border-color .2s; }
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+main { flex: 1; padding: 24px; max-width: 1400px; width: 100%; margin: 0 auto; }
+
+/* Cards/Surfaces */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+.stat-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+.stat-card .value { font-size: 28px; font-weight: 700; }
+.stat-card.green .value { color: var(--success); }
+.stat-card.red .value { color: var(--danger); }
+.stat-card.amber .value { color: var(--warning); }
+.stat-card.blue .value { color: var(--primary); }
+
+/* Tables */
+.table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; }
+th { background: var(--surface2); padding: 10px 14px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); white-space: nowrap; }
+td { padding: 10px 14px; border-top: 1px solid var(--border); vertical-align: middle; }
+tr:hover td { background: var(--surface2); }
+tfoot td { background: var(--surface2); font-weight: 600; border-top: 2px solid var(--border); }
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { color: var(--text); }
+
+/* Form panels */
+.form-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; display: none; }
+.form-panel.open { display: block; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.form-group.full { grid-column: 1 / -1; }
+.form-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+/* Section headers */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.section-title { font-size: 18px; font-weight: 700; }
+.section-actions { display: flex; gap: 8px; }
+
+/* Badges */
+.badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+.badge-green { background: rgba(16,185,129,.2); color: var(--success); }
+.badge-red { background: rgba(239,68,68,.2); color: var(--danger); }
+.badge-amber { background: rgba(245,158,11,.2); color: var(--warning); }
+.badge-blue { background: rgba(59,130,246,.2); color: var(--primary); }
+.badge-purple { background: rgba(139,92,246,.2); color: var(--purple); }
+.badge-gray { background: rgba(148,163,184,.2); color: var(--muted); }
+
+/* Progress bar */
+.progress-bar { background: var(--surface2); border-radius: 99px; height: 6px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 99px; transition: width .3s; }
+
+/* Toast */
+#toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; min-width: 240px; max-width: 360px; animation: toast-in .3s ease; display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.toast.success { border-left: 4px solid var(--success); }
+.toast.error { border-left: 4px solid var(--danger); }
+.toast.warning { border-left: 4px solid var(--warning); }
+.toast.info { border-left: 4px solid var(--primary); }
+@keyframes toast-in { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(40px); } }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 500; display: flex; align-items: center; justify-content: center; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; width: 400px; max-width: 95vw; }
+.modal h3 { margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+/* Color dot */
+.color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; flex-shrink: 0; }
+/* Quick balance input */
+.quick-bal { background: transparent; border: none; border-bottom: 1px solid transparent; color: var(--text); padding: 2px 4px; width: 110px; font-size: 13px; }
+.quick-bal:focus { outline: none; border-bottom-color: var(--primary); background: var(--surface2); border-radius: 4px 4px 0 0; }
+
+/* Smart Pay */
+.smart-pay-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.smart-pay-name { font-weight: 600; }
+.smart-pay-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.can-full { color: var(--success); font-weight: 600; }
+.can-min { color: var(--warning); font-weight: 600; }
+.cannot { color: var(--danger); font-weight: 600; }
+
+/* Category icons */
+.cat-icon { font-size: 16px; margin-right: 6px; }
+
+/* Days badge */
+.days-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 99px; }
+.days-red { background: rgba(239,68,68,.2); color: var(--danger); }
+.days-amber { background: rgba(245,158,11,.2); color: var(--warning); }
+.days-green { background: rgba(16,185,129,.2); color: var(--success); }
+
+/* Util select field width */
+select { width: 100%; }
+.inline-flex { display: flex; gap: 8px; align-items: center; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-8 { gap: 8px; }
+.mt-16 { margin-top: 16px; }
+.mt-8 { margin-top: 8px; }
+.mb-16 { margin-bottom: 16px; }
+.text-muted { color: var(--muted); }
+.text-sm { font-size: 12px; }
+.font-bold { font-weight: 700; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  main { padding: 12px; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  nav { gap: 0; }
+  .nav-tab { padding: 12px 12px; }
+}
+
+/* Password field group */
+.pass-group { display: flex; gap: 6px; }
+.pass-group input { flex: 1; }
+
+/* Section tabs */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>&#128200; Finance Tracker</h1>
+    <div class="header-actions">
+      <button class="btn-ghost btn-sm" onclick="exportData()">&#8593; Export</button>
+      <button class="btn-ghost btn-sm" onclick="document.getElementById('importFile').click()">&#8595; Import</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    </div>
+  </header>
+  <nav id="nav">
+    <div class="nav-tab active" data-tab="dashboard">Dashboard</div>
+    <div class="nav-tab" data-tab="accounts">Bank Accounts</div>
+    <div class="nav-tab" data-tab="cards">Credit Cards</div>
+    <div class="nav-tab" data-tab="bills">Bills</div>
+    <div class="nav-tab" data-tab="payments">Payment Log</div>
+    <div class="nav-tab" data-tab="settings">Settings</div>
+  </nav>
+  <main>
+    <!-- DASHBOARD TAB -->
+    <div class="tab-content active" id="tab-dashboard">
+      <div class="stat-grid" id="dash-stats"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;flex-wrap:wrap">
+        <div>
+          <div class="section-header">
+            <div class="section-title">&#9889; Smart Pay — Next 30 Days</div>
+          </div>
+          <div id="smart-pay-list"></div>
+        </div>
+        <div>
+          <div class="section-header">
+            <div class="section-title">&#128203; Recent Payments</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Description</th><th>Account</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody id="recent-payments-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BANK ACCOUNTS TAB -->
+    <div class="tab-content" id="tab-accounts">
+      <div class="section-header">
+        <div class="section-title">&#127968; Bank Accounts</div>
+        <div class="section-actions">
+          <button class="btn-primary" onclick="toggleAccountForm()">+ Add Account</button>
+        </div>
+      </div>
+      <div class="form-panel" id="account-form-panel">
+        <h3 id="account-form-title">Add Account</h3>
+        <input type="hidden" id="acct-edit-id">
+        <div class="form-grid">
+          <div class="form-group"><label>Nickname *</label><input id="acct-name" placeholder="e.g. Main Checking"></div>
+          <div class="form-group"><label>Bank Name</label><input id="acct-bank" placeholder="e.g. Chase"></div>
+          <div class="form-group"><label>Account Type</label>
+            <select id="acct-type">
+              <option value="checking">Checking</option>
+              <option value="savings">Savings</option>
+              <option value="money_market">Money Market</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Balance ($) *</label><input id="acct-balance" type="number" step="0.01" placeholder="0.00"></div>
+          <div class="form-group"><label>Last 4 Digits</label><input id="acct-last4" maxlength="4" placeholder="1234"></div>
+          <div class="form-group"><label>Color</label><input id="acct-color" type="color" value="#3b82f6"></div>
+          <div class="form-group full"><label>Notes</label><textarea id="acct-notes" rows="2" placeholder="Optional notes..."></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" onclick="saveAccount()">Save Account</button>
+          <button class="btn-ghost" onclick="toggleAccountForm(false)">Cancel</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Bank</th><th>Type</th><th>Last 4</th><th>Balance</th><th>Quick Update</th><th>Notes</th><th>Actions</th></tr></thead>
+          <tbody id="accounts-tbody"></tbody>
+          <tfoot><tr><td colspan="4">Total</td><td id="accounts-total" colspan="4"></td></tr></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- CREDIT CARDS TAB -->
+    <div class="tab-content" id="tab-cards">
+      <div class="section-header">
+        <div class="section-title">&#128179; Credit Cards</div>
+        <div class="section-actions">
+          <button class="btn-primary" onclick="toggleCardForm()">+ Add Card</button>
+        </div>
+      </div>
+      <div class="form-panel" id="card-form-panel">
+        <h3 id="card-form-title">Add Credit Card</h3>
+        <input type="hidden" id="card-edit-id">
+        <div class="form-grid">
+          <div class="form-group"><label>Card Nickname *</label><input id="card-name" placeholder="e.g. Chase Sapphire"></div>
+          <div class="form-group"><label>Bank / Issuer</label><input id="card-bank" placeholder="e.g. Chase"></div>
+          <div class="form-group"><label>Last 4 Digits</label><input id="card-last4" maxlength="4" placeholder="4321"></div>
+          <div class="form-group"><label>Credit Limit ($)</label><input id="card-limit" type="number" step="0.01" placeholder="5000.00"></div>
+          <div class="form-group"><label>Current Balance ($)</label><input id="card-balance" type="number" step="0.01" placeholder="0.00"></div>
+          <div class="form-group"><label>Statement Balance ($)</label><input id="card-stmt-bal" type="number" step="0.01" placeholder="0.00"></div>
+          <div class="form-group"><label>Minimum Payment ($)</label><input id="card-min-pay" type="number" step="0.01" placeholder="25.00"></div>
+          <div class="form-group"><label>Due Day (1-31)</label><input id="card-due-day" type="number" min="1" max="31" placeholder="15"></div>
+          <div class="form-group"><label>Next Due Date</label><input id="card-due-date" type="date"></div>
+          <div class="form-group"><label>Autopay</label>
+            <select id="card-autopay">
+              <option value="none">None</option>
+              <option value="minimum">Minimum Payment</option>
+              <option value="full">Full Balance</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Pay From Account</label>
+            <select id="card-pay-from"><option value="">-- Select Account --</option></select>
+          </div>
+          <div class="form-group"><label>Color</label><input id="card-color" type="color" value="#8b5cf6"></div>
+          <div class="form-group"><label>Login URL</label><input id="card-login-url" placeholder="https://..."></div>
+          <div class="form-group"><label>Login Username</label><input id="card-login-user" placeholder="username or email"></div>
+          <div class="form-group"><label>Login Password</label>
+            <div class="pass-group">
+              <input id="card-login-pass" type="password" placeholder="stored encrypted">
+              <button type="button" class="btn-icon" onclick="togglePassVis('card-login-pass', this)">&#128065;</button>
+            </div>
+          </div>
+          <div class="form-group full"><label>Notes</label><textarea id="card-notes" rows="2"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" onclick="saveCard()">Save Card</button>
+          <button class="btn-ghost" onclick="toggleCardForm(false)">Cancel</button>
+        </div>
+      </div>
+      <div id="cards-list"></div>
+    </div>
+
+    <!-- BILLS TAB -->
+    <div class="tab-content" id="tab-bills">
+      <div class="section-header">
+        <div class="section-title">&#128196; Bills</div>
+        <div class="section-actions">
+          <button class="btn-primary" onclick="toggleBillForm()">+ Add Bill</button>
+        </div>
+      </div>
+      <div class="form-panel" id="bill-form-panel">
+        <h3 id="bill-form-title">Add Bill</h3>
+        <input type="hidden" id="bill-edit-id">
+        <div class="form-grid">
+          <div class="form-group"><label>Bill Name *</label><input id="bill-name" placeholder="e.g. Electric Bill"></div>
+          <div class="form-group"><label>Category</label>
+            <select id="bill-category">
+              <option value="utilities">Utilities</option>
+              <option value="insurance">Insurance</option>
+              <option value="subscriptions">Subscriptions</option>
+              <option value="rent">Rent / Mortgage</option>
+              <option value="loan">Loan</option>
+              <option value="internet">Internet</option>
+              <option value="phone">Phone</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Amount ($)</label><input id="bill-amount" type="number" step="0.01" placeholder="0.00"></div>
+          <div class="form-group" style="align-self:end"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bill-variable" style="width:auto"> Variable Amount</label></div>
+          <div class="form-group"><label>Due Day (1-31)</label><input id="bill-due-day" type="number" min="1" max="31" placeholder="1"></div>
+          <div class="form-group"><label>Next Due Date</label><input id="bill-due-date" type="date"></div>
+          <div class="form-group" style="align-self:end"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bill-recurring" checked style="width:auto"> Recurring</label></div>
+          <div class="form-group"><label>Frequency</label>
+            <select id="bill-frequency">
+              <option value="monthly">Monthly</option>
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Bi-Weekly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Pay From Account</label>
+            <select id="bill-pay-from"><option value="">-- Select Account --</option></select>
+          </div>
+          <div class="form-group" style="align-self:end"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bill-autopay" style="width:auto"> Autopay</label></div>
+          <div class="form-group"><label>Payee Name</label><input id="bill-payee-name" placeholder="e.g. Con Edison"></div>
+          <div class="form-group"><label>Payee / Login URL</label><input id="bill-payee-url" placeholder="https://..."></div>
+          <div class="form-group"><label>Login Username</label><input id="bill-login-user" placeholder="username or email"></div>
+          <div class="form-group"><label>Login Password</label>
+            <div class="pass-group">
+              <input id="bill-login-pass" type="password" placeholder="stored encrypted">
+              <button type="button" class="btn-icon" onclick="togglePassVis('bill-login-pass', this)">&#128065;</button>
+            </div>
+          </div>
+          <div class="form-group"><label>Color</label><input id="bill-color" type="color" value="#10b981"></div>
+          <div class="form-group" style="align-self:end"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="bill-active" checked style="width:auto"> Active</label></div>
+          <div class="form-group full"><label>Notes</label><textarea id="bill-notes" rows="2"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" onclick="saveBill()">Save Bill</button>
+          <button class="btn-ghost" onclick="toggleBillForm(false)">Cancel</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Category</th><th>Amount</th><th>Due</th><th>Days Left</th><th>Frequency</th><th>Pay From</th><th>Autopay</th><th>Active</th><th>Actions</th></tr></thead>
+          <tbody id="bills-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PAYMENT LOG TAB -->
+    <div class="tab-content" id="tab-payments">
+      <div class="section-header">
+        <div class="section-title">&#128200; Payment Log</div>
+        <div class="section-actions">
+          <button class="btn-primary" onclick="togglePaymentForm()">+ Log Payment</button>
+        </div>
+      </div>
+      <div class="form-panel" id="payment-form-panel">
+        <h3 id="payment-form-title">Log Payment</h3>
+        <input type="hidden" id="pay-edit-id">
+        <div class="form-grid">
+          <div class="form-group"><label>Payment For</label>
+            <select id="pay-source">
+              <option value="">-- Select --</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Pay From Bank Account</label>
+            <select id="pay-bank"><option value="">-- Select Account --</option></select>
+          </div>
+          <div class="form-group"><label>Amount ($) *</label><input id="pay-amount" type="number" step="0.01" placeholder="0.00"></div>
+          <div class="form-group"><label>Payment Date *</label><input id="pay-date" type="date"></div>
+          <div class="form-group"><label>Method</label>
+            <select id="pay-method">
+              <option value="online">Online</option>
+              <option value="check">Check</option>
+              <option value="auto">Auto</option>
+              <option value="wire">Wire</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Status</label>
+            <select id="pay-status">
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Reference #</label><input id="pay-ref" placeholder="Optional reference number"></div>
+          <div class="form-group full"><label>Notes</label><textarea id="pay-notes" rows="2"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button class="btn-primary" onclick="savePayment()">Save Payment</button>
+          <button class="btn-ghost" onclick="togglePaymentForm(false)">Cancel</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th class="sortable" onclick="sortPayments('paymentDate')">Date &#8597;</th>
+              <th class="sortable" onclick="sortPayments('sourceName')">Description &#8597;</th>
+              <th>From Account</th>
+              <th class="sortable" onclick="sortPayments('amount')">Amount &#8597;</th>
+              <th>Method</th>
+              <th class="sortable" onclick="sortPayments('status')">Status &#8597;</th>
+              <th>Ref#</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="payments-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SETTINGS TAB -->
+    <div class="tab-content" id="tab-settings">
+      <div style="max-width:600px">
+        <div class="card mb-16" style="margin-bottom:20px">
+          <h3 style="margin-bottom:16px">&#128274; Master Password</h3>
+          <p class="text-muted text-sm" style="margin-bottom:16px">Set a master password to encrypt login credentials stored for cards and bills. Without it, passwords are stored as plaintext.</p>
+          <div id="master-pass-section"></div>
+        </div>
+        <div class="card mb-16" style="margin-bottom:20px">
+          <h3 style="margin-bottom:16px">&#128190; Data Management</h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+            <button class="btn-ghost" onclick="exportData()">&#8593; Export Backup (JSON)</button>
+            <button class="btn-ghost" onclick="document.getElementById('importFile').click()">&#8595; Import from JSON</button>
+          </div>
+          <hr style="border-color:var(--border);margin:16px 0">
+          <h4 style="color:var(--danger);margin-bottom:12px">&#9888;&#65039; Danger Zone</h4>
+          <button class="btn-danger" onclick="clearAllData()">&#128465; Clear All Data</button>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom:12px">&#8505;&#65039; About</h3>
+          <p class="text-muted text-sm" style="line-height:1.7">
+            <strong>Finance Tracker</strong> — A self-contained personal finance manager.<br>
+            All data is stored locally in your browser's localStorage.<br>
+            Use the Export button regularly to back up your data to a JSON file.<br>
+            <br>
+            <strong>Encryption:</strong> Login passwords are encrypted using AES-GCM with a key derived from your master password via PBKDF2 (100,000 iterations, SHA-256).<br>
+            <strong>Note:</strong> If you clear browser data, your finance data will be lost — export regularly!
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+<script>
+// ============================================================
+// DATA MODEL & STORAGE
+// ============================================================
+const STORAGE_KEY = 'financeData';
+
+function defaultData() {
+  return { bankAccounts: [], creditCards: [], bills: [], payments: [], settings: {} };
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultData();
+    return JSON.parse(raw);
+  } catch(e) { return defaultData(); }
+}
+
+function saveData(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+let appData = loadData();
+
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ============================================================
+// CRYPTO UTILITIES
+// ============================================================
+let _masterPasswordCache = null;
+let _derivedKeyCache = null;
+
+async function sha256hex(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function b64encode(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function b64decode(str) {
+  const bin = atob(str);
+  const buf = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+async function deriveKey(password, saltB64) {
+  const salt = b64decode(saltB64);
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt, iterations:100000, hash:'SHA-256' },
+    keyMaterial,
+    { name:'AES-GCM', length:256 },
+    false, ['encrypt','decrypt']
+  );
+}
+
+async function encryptPassword(plain, password, saltB64) {
+  const key = await deriveKey(password, saltB64);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const enc = await crypto.subtle.encrypt(
+    { name:'AES-GCM', iv }, key, new TextEncoder().encode(plain)
+  );
+  const combined = new Uint8Array(12 + enc.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(enc), 12);
+  return b64encode(combined.buffer);
+}
+
+async function decryptPassword(enc, password, saltB64) {
+  try {
+    const key = await deriveKey(password, saltB64);
+    const combined = new Uint8Array(b64decode(enc));
+    const iv = combined.slice(0, 12);
+    const data = combined.slice(12);
+    const dec = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, data);
+    return new TextDecoder().decode(dec);
+  } catch(e) { return null; }
+}
+
+function hasMasterPassword() {
+  return !!appData.settings.masterPasswordHash;
+}
+
+async function verifyMasterPassword(pw) {
+  const salt = appData.settings.encryptionSalt;
+  const hash = await sha256hex(pw + salt);
+  return hash === appData.settings.masterPasswordHash;
+}
+
+async function getMasterPassword() {
+  if (_masterPasswordCache) return _masterPasswordCache;
+  if (!hasMasterPassword()) return null;
+  return new Promise(resolve => {
+    showModal('Enter Master Password', `
+      <p class="text-muted text-sm" style="margin-bottom:12px">Enter your master password to decrypt stored credentials.</p>
+      <div class="form-group">
+        <input type="password" id="modal-mp-input" placeholder="Master password..." autofocus>
+      </div>
+    `, [
+      { label:'Unlock', cls:'btn-primary', action: async () => {
+        const pw = document.getElementById('modal-mp-input').value;
+        if (!pw) { toast('Enter a password', 'error'); return false; }
+        const ok = await verifyMasterPassword(pw);
+        if (!ok) { toast('Wrong master password', 'error'); return false; }
+        _masterPasswordCache = pw;
+        resolve(pw);
+        return true;
+      }},
+      { label:'Cancel', cls:'btn-ghost', action: () => { resolve(null); return true; } }
+    ]);
+    document.getElementById('modal-mp-input').addEventListener('keydown', async e => {
+      if (e.key === 'Enter') document.querySelector('.modal .btn-primary').click();
+    });
+  });
+}
+
+async function encryptOrPlain(plain) {
+  if (!plain) return '';
+  if (!hasMasterPassword()) return 'plain:' + plain;
+  const salt = appData.settings.encryptionSalt;
+  const pw = await getMasterPassword();
+  if (!pw) return 'plain:' + plain;
+  return await encryptPassword(plain, pw, salt);
+}
+
+async function decryptOrPlain(stored) {
+  if (!stored) return '';
+  if (stored.startsWith('plain:')) return stored.slice(6);
+  const salt = appData.settings.encryptionSalt;
+  const pw = await getMasterPassword();
+  if (!pw) return null;
+  return await decryptPassword(stored, pw, salt);
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+function switchTab(name) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.toggle('active', t.id==='tab-'+name));
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'accounts') renderAccounts();
+  if (name === 'cards') renderCards();
+  if (name === 'bills') renderBills();
+  if (name === 'payments') renderPayments();
+  if (name === 'settings') renderSettings();
+}
+
+// ============================================================
+// TOAST NOTIFICATIONS
+// ============================================================
+function toast(msg, type='info') {
+  const icons = { success:'✓', error:'✕', warning:'⚠', info:'ℹ' };
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<span>${icons[type]||icons.info}</span><span>${msg}</span>`;
+  c.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'toast-out .3s ease forwards';
+    setTimeout(() => el.remove(), 300);
+  }, 3200);
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function showModal(title, bodyHTML, buttons) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const btns = buttons.map(b =>
+    `<button class="${b.cls}" data-idx="${buttons.indexOf(b)}">${b.label}</button>`
+  ).join('');
+  overlay.innerHTML = `<div class="modal"><h3>${title}</h3><div id="modal-body">${bodyHTML}</div><div class="modal-actions">${btns}</div></div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const idx = parseInt(btn.dataset.idx);
+      const result = await buttons[idx].action();
+      if (result !== false) overlay.remove();
+    });
+  });
+  return overlay;
+}
+
+function confirm(msg, onYes) {
+  showModal('Confirm', `<p>${msg}</p>`, [
+    { label:'Yes, Delete', cls:'btn-danger', action: () => { onYes(); return true; } },
+    { label:'Cancel', cls:'btn-ghost', action: () => true }
+  ]);
+}
+
+// ============================================================
+// FORMATTING HELPERS
+// ============================================================
+function fmt$(n) {
+  const v = parseFloat(n) || 0;
+  return '$' + v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function fmtDate(d) {
+  if (!d) return '';
+  return new Date(d+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+
+function daysUntil(dateStr) {
+  if (!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(dateStr+'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+function daysBadge(days) {
+  if (days === null) return '';
+  if (days < 0) return `<span class="days-badge days-red">Overdue ${Math.abs(days)}d</span>`;
+  if (days <= 3) return `<span class="days-badge days-red">${days}d left</span>`;
+  if (days <= 7) return `<span class="days-badge days-amber">${days}d left</span>`;
+  return `<span class="days-badge days-green">${days}d left</span>`;
+}
+
+function statusBadge(status) {
+  const map = { completed:'badge-green', pending:'badge-amber', failed:'badge-red' };
+  return `<span class="badge ${map[status]||'badge-gray'}">${status}</span>`;
+}
+
+function acctTypeLabel(t) {
+  return {checking:'Checking',savings:'Savings',money_market:'Money Market',other:'Other'}[t]||t;
+}
+
+const CAT_ICONS = {
+  utilities:'⚡', insurance:'🛡', subscriptions:'📺', rent:'🏠',
+  loan:'💰', internet:'🌐', phone:'📱', other:'📄'
+};
+function catIcon(c) { return CAT_ICONS[c] || '📄'; }
+
+function accountName(id) {
+  const a = appData.bankAccounts.find(x=>x.id===id);
+  return a ? a.name : '—';
+}
+
+function togglePassVis(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = '🙈'; }
+  else { inp.type = 'password'; btn.textContent = '👁'; }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboard() {
+  const totalBank = appData.bankAccounts.reduce((s,a) => s + (parseFloat(a.balance)||0), 0);
+  const totalDebt = appData.creditCards.reduce((s,c) => s + (parseFloat(c.currentBalance)||0), 0);
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const in30 = new Date(today); in30.setDate(in30.getDate()+30);
+
+  // Due next 30 days: cards + bills
+  let due30 = 0;
+  appData.creditCards.forEach(c => {
+    if (!c.dueDate) return;
+    const d = new Date(c.dueDate+'T00:00:00');
+    if (d >= today && d <= in30) due30 += parseFloat(c.minimumPayment)||0;
+  });
+  appData.bills.filter(b=>b.isActive!==false).forEach(b => {
+    if (!b.dueDate) return;
+    const d = new Date(b.dueDate+'T00:00:00');
+    if (d >= today && d <= in30) due30 += parseFloat(b.amount)||0;
+  });
+
+  const netWorth = totalBank - totalDebt;
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card green"><div class="label">Total Bank Balance</div><div class="value">${fmt$(totalBank)}</div></div>
+    <div class="stat-card red"><div class="label">Total Card Debt</div><div class="value">${fmt$(totalDebt)}</div></div>
+    <div class="stat-card amber"><div class="label">Due Next 30 Days</div><div class="value">${fmt$(due30)}</div></div>
+    <div class="stat-card ${netWorth>=0?'blue':'red'}"><div class="label">Net Worth</div><div class="value">${fmt$(netWorth)}</div></div>
+  `;
+
+  // Smart pay list
+  let items = [];
+  appData.creditCards.forEach(c => {
+    if (!c.dueDate) return;
+    const d = new Date(c.dueDate+'T00:00:00');
+    if (d < today || d > in30) return;
+    const days = daysUntil(c.dueDate);
+    const minPay = parseFloat(c.minimumPayment)||0;
+    const fullPay = parseFloat(c.statementBal)||parseFloat(c.currentBalance)||0;
+    const payAcctId = c.payFromAcctId;
+    items.push({ type:'card', name: c.name + (c.last4?` (...${c.last4})`:''), dueDate:c.dueDate, days,
+      minPay, fullPay, payAcctId, color:c.color, autopay:c.autopay });
+  });
+  appData.bills.filter(b=>b.isActive!==false).forEach(b => {
+    if (!b.dueDate) return;
+    const d = new Date(b.dueDate+'T00:00:00');
+    if (d < today || d > in30) return;
+    const days = daysUntil(b.dueDate);
+    const amt = parseFloat(b.amount)||0;
+    items.push({ type:'bill', name: b.name, dueDate:b.dueDate, days,
+      minPay:amt, fullPay:amt, payAcctId:b.payFromAcctId, color:b.color, autopay:b.autopay?'full':'none' });
+  });
+  items.sort((a,b)=>a.days-b.days);
+
+  if (items.length === 0) {
+    document.getElementById('smart-pay-list').innerHTML = '<p class="text-muted text-sm">No upcoming bills or payments in the next 30 days.</p>';
+  } else {
+    document.getElementById('smart-pay-list').innerHTML = items.map(item => {
+      // Find pay account
+      let acct = null;
+      if (item.payAcctId) acct = appData.bankAccounts.find(a=>a.id===item.payAcctId);
+      if (!acct && appData.bankAccounts.length > 0) {
+        acct = appData.bankAccounts.find(a=>(parseFloat(a.balance)||0) >= item.fullPay) ||
+               appData.bankAccounts.find(a=>(parseFloat(a.balance)||0) >= item.minPay) ||
+               appData.bankAccounts[0];
+      }
+      const acctBal = acct ? (parseFloat(acct.balance)||0) : 0;
+      let payStatus, payClass;
+      if (!acct) { payStatus = 'No account'; payClass = 'cannot'; }
+      else if (acctBal >= item.fullPay) { payStatus = `Can pay full (${fmt$(item.fullPay)})`; payClass = 'can-full'; }
+      else if (acctBal >= item.minPay) { payStatus = `Min only (${fmt$(item.minPay)})`; payClass = 'can-min'; }
+      else { payStatus = `Insufficient (need ${fmt$(item.minPay)})`; payClass = 'cannot'; }
+      const dot = item.color ? `<span class="color-dot" style="background:${item.color}"></span>` : '';
+      const autopayNote = item.autopay && item.autopay!=='none' ? `<span class="badge badge-blue" style="font-size:10px">Autopay: ${item.autopay}</span>` : '';
+      return `<div class="smart-pay-item">
+        <div>
+          <div class="smart-pay-name">${dot}${item.name} ${autopayNote}</div>
+          <div class="smart-pay-meta">Due ${fmtDate(item.dueDate)} &bull; ${acct?acct.name:'No account assigned'}</div>
+        </div>
+        <div style="text-align:right">
+          ${daysBadge(item.days)}
+          <div class="${payClass}" style="margin-top:4px;font-size:12px">${payStatus}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Recent payments
+  const recent = [...appData.payments].sort((a,b)=>new Date(b.paymentDate)-new Date(a.paymentDate)).slice(0,8);
+  document.getElementById('recent-payments-tbody').innerHTML = recent.length ? recent.map(p=>`
+    <tr>
+      <td>${fmtDate(p.paymentDate)}</td>
+      <td>${p.sourceName||'—'}</td>
+      <td>${accountName(p.bankAccountId)}</td>
+      <td>${fmt$(p.amount)}</td>
+      <td>${statusBadge(p.status)}</td>
+    </tr>`).join('') : '<tr><td colspan="5" style="text-align:center;color:var(--muted)">No payments logged yet.</td></tr>';
+}
+
+// ============================================================
+// BANK ACCOUNTS
+// ============================================================
+function toggleAccountForm(show) {
+  const panel = document.getElementById('account-form-panel');
+  if (show === false) {
+    panel.classList.remove('open');
+    clearAccountForm();
+    return;
+  }
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && !document.getElementById('acct-edit-id').value) {
+    document.getElementById('account-form-title').textContent = 'Add Account';
+  }
+}
+
+function clearAccountForm() {
+  ['acct-edit-id','acct-name','acct-bank','acct-balance','acct-last4','acct-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('acct-type').value = 'checking';
+  document.getElementById('acct-color').value = '#3b82f6';
+}
+
+function saveAccount() {
+  const id = document.getElementById('acct-edit-id').value;
+  const name = document.getElementById('acct-name').value.trim();
+  if (!name) { toast('Account nickname is required', 'error'); return; }
+  const balance = parseFloat(document.getElementById('acct-balance').value) || 0;
+  const obj = {
+    id: id || uid(),
+    name,
+    bankName: document.getElementById('acct-bank').value.trim(),
+    acctType: document.getElementById('acct-type').value,
+    balance,
+    last4: document.getElementById('acct-last4').value.trim(),
+    notes: document.getElementById('acct-notes').value.trim(),
+    color: document.getElementById('acct-color').value,
+    updatedAt: new Date().toISOString()
+  };
+  if (id) {
+    const idx = appData.bankAccounts.findIndex(a=>a.id===id);
+    obj.createdAt = appData.bankAccounts[idx].createdAt;
+    appData.bankAccounts[idx] = obj;
+    toast('Account updated', 'success');
+  } else {
+    obj.createdAt = new Date().toISOString();
+    appData.bankAccounts.push(obj);
+    toast('Account added', 'success');
+  }
+  saveData(appData);
+  toggleAccountForm(false);
+  renderAccounts();
+}
+
+function editAccount(id) {
+  const a = appData.bankAccounts.find(x=>x.id===id);
+  if (!a) return;
+  document.getElementById('acct-edit-id').value = a.id;
+  document.getElementById('acct-name').value = a.name;
+  document.getElementById('acct-bank').value = a.bankName||'';
+  document.getElementById('acct-type').value = a.acctType||'checking';
+  document.getElementById('acct-balance').value = a.balance;
+  document.getElementById('acct-last4').value = a.last4||'';
+  document.getElementById('acct-notes').value = a.notes||'';
+  document.getElementById('acct-color').value = a.color||'#3b82f6';
+  document.getElementById('account-form-title').textContent = 'Edit Account';
+  const panel = document.getElementById('account-form-panel');
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function deleteAccount(id) {
+  confirm('Delete this account? This cannot be undone.', () => {
+    appData.bankAccounts = appData.bankAccounts.filter(a=>a.id!==id);
+    saveData(appData);
+    renderAccounts();
+    toast('Account deleted', 'warning');
+  });
+}
+
+function updateQuickBalance(id, val) {
+  const a = appData.bankAccounts.find(x=>x.id===id);
+  if (!a) return;
+  const newBal = parseFloat(val);
+  if (isNaN(newBal)) { toast('Invalid balance', 'error'); return; }
+  a.balance = newBal;
+  a.updatedAt = new Date().toISOString();
+  saveData(appData);
+  renderAccounts();
+  toast('Balance updated', 'success');
+}
+
+function renderAccounts() {
+  const tbody = document.getElementById('accounts-tbody');
+  const accounts = appData.bankAccounts;
+  if (!accounts.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">No bank accounts yet. Click "+ Add Account" to get started.</td></tr>';
+    document.getElementById('accounts-total').textContent = '$0.00';
+    return;
+  }
+  tbody.innerHTML = accounts.map(a => `
+    <tr>
+      <td><span class="color-dot" style="background:${a.color||'#3b82f6'}"></span><strong>${a.name}</strong></td>
+      <td>${a.bankName||'—'}</td>
+      <td>${acctTypeLabel(a.acctType)}</td>
+      <td>${a.last4?`...${a.last4}`:'—'}</td>
+      <td><strong>${fmt$(a.balance)}</strong></td>
+      <td>
+        <input class="quick-bal" type="number" step="0.01" value="${parseFloat(a.balance).toFixed(2)}"
+          onkeydown="if(event.key==='Enter'){updateQuickBalance('${a.id}',this.value);this.blur()}"
+          onblur="updateQuickBalance('${a.id}',this.value)" title="Press Enter or click away to save">
+      </td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.notes||''}">${a.notes||'—'}</td>
+      <td>
+        <button class="btn-icon btn-sm" onclick="editAccount('${a.id}')" title="Edit">✏️</button>
+        <button class="btn-icon btn-sm" onclick="deleteAccount('${a.id}')" title="Delete">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+  const total = accounts.reduce((s,a)=>s+(parseFloat(a.balance)||0), 0);
+  document.getElementById('accounts-total').innerHTML = `<strong>${fmt$(total)}</strong> &nbsp;<span class="text-muted text-sm">(${accounts.length} account${accounts.length!==1?'s':''})</span>`;
+}
+
+// ============================================================
+// CREDIT CARDS
+// ============================================================
+function populateAccountDropdowns() {
+  const accounts = appData.bankAccounts;
+  const opts = '<option value="">-- Select Account --</option>' + accounts.map(a=>`<option value="${a.id}">${a.name}${a.last4?` ...${a.last4}`:''} (${fmt$(a.balance)})</option>`).join('');
+  ['card-pay-from','bill-pay-from','pay-bank'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+function toggleCardForm(show) {
+  const panel = document.getElementById('card-form-panel');
+  populateAccountDropdowns();
+  if (show === false) { panel.classList.remove('open'); clearCardForm(); return; }
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && !document.getElementById('card-edit-id').value) {
+    document.getElementById('card-form-title').textContent = 'Add Credit Card';
+  }
+}
+
+function clearCardForm() {
+  ['card-edit-id','card-name','card-bank','card-last4','card-limit','card-balance','card-stmt-bal',
+   'card-min-pay','card-due-day','card-due-date','card-login-url','card-login-user','card-login-pass','card-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('card-autopay').value = 'none';
+  document.getElementById('card-pay-from').value = '';
+  document.getElementById('card-color').value = '#8b5cf6';
+}
+
+async function saveCard() {
+  const id = document.getElementById('card-edit-id').value;
+  const name = document.getElementById('card-name').value.trim();
+  if (!name) { toast('Card nickname is required', 'error'); return; }
+
+  const passInput = document.getElementById('card-login-pass');
+  const rawPass = passInput.value;
+  const passUnchanged = passInput.dataset.unchanged === 'true';
+  let loginPassEnc = '';
+  if (rawPass && !passUnchanged) {
+    // New password entered — encrypt it
+    loginPassEnc = await encryptOrPlain(rawPass);
+  } else if (id) {
+    // Editing and password not changed or cleared — keep existing
+    const existing = appData.creditCards.find(c=>c.id===id);
+    loginPassEnc = existing ? existing.loginPassEnc : '';
+  }
+
+  const obj = {
+    id: id || uid(),
+    name,
+    bankName: document.getElementById('card-bank').value.trim(),
+    last4: document.getElementById('card-last4').value.trim(),
+    creditLimit: parseFloat(document.getElementById('card-limit').value)||0,
+    currentBalance: parseFloat(document.getElementById('card-balance').value)||0,
+    statementBal: parseFloat(document.getElementById('card-stmt-bal').value)||0,
+    minimumPayment: parseFloat(document.getElementById('card-min-pay').value)||0,
+    dueDay: parseInt(document.getElementById('card-due-day').value)||0,
+    dueDate: document.getElementById('card-due-date').value,
+    autopay: document.getElementById('card-autopay').value,
+    payFromAcctId: document.getElementById('card-pay-from').value,
+    loginUrl: document.getElementById('card-login-url').value.trim(),
+    loginUser: document.getElementById('card-login-user').value.trim(),
+    loginPassEnc,
+    notes: document.getElementById('card-notes').value.trim(),
+    color: document.getElementById('card-color').value,
+    updatedAt: new Date().toISOString()
+  };
+  if (id) {
+    const idx = appData.creditCards.findIndex(c=>c.id===id);
+    obj.createdAt = appData.creditCards[idx].createdAt;
+    appData.creditCards[idx] = obj;
+    toast('Card updated', 'success');
+  } else {
+    obj.createdAt = new Date().toISOString();
+    appData.creditCards.push(obj);
+    toast('Card added', 'success');
+  }
+  saveData(appData);
+  toggleCardForm(false);
+  renderCards();
+}
+
+async function editCard(id) {
+  const c = appData.creditCards.find(x=>x.id===id);
+  if (!c) return;
+  populateAccountDropdowns();
+  document.getElementById('card-edit-id').value = c.id;
+  document.getElementById('card-name').value = c.name;
+  document.getElementById('card-bank').value = c.bankName||'';
+  document.getElementById('card-last4').value = c.last4||'';
+  document.getElementById('card-limit').value = c.creditLimit||'';
+  document.getElementById('card-balance').value = c.currentBalance||'';
+  document.getElementById('card-stmt-bal').value = c.statementBal||'';
+  document.getElementById('card-min-pay').value = c.minimumPayment||'';
+  document.getElementById('card-due-day').value = c.dueDay||'';
+  document.getElementById('card-due-date').value = c.dueDate||'';
+  document.getElementById('card-autopay').value = c.autopay||'none';
+  document.getElementById('card-pay-from').value = c.payFromAcctId||'';
+  document.getElementById('card-login-url').value = c.loginUrl||'';
+  document.getElementById('card-login-user').value = c.loginUser||'';
+  document.getElementById('card-login-pass').value = c.loginPassEnc ? '••••••••' : '';
+  document.getElementById('card-notes').value = c.notes||'';
+  document.getElementById('card-color').value = c.color||'#8b5cf6';
+  document.getElementById('card-form-title').textContent = 'Edit Credit Card';
+  const panel = document.getElementById('card-form-panel');
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+  // Mark password as unchanged
+  const passInput = document.getElementById('card-login-pass');
+  passInput.dataset.unchanged = 'true';
+  passInput.addEventListener('input', () => { passInput.dataset.unchanged = ''; }, { once:true });
+}
+
+function deleteCard(id) {
+  confirm('Delete this card? This cannot be undone.', () => {
+    appData.creditCards = appData.creditCards.filter(c=>c.id!==id);
+    saveData(appData);
+    renderCards();
+    toast('Card deleted', 'warning');
+  });
+}
+
+async function copyCardPassword(id) {
+  const c = appData.creditCards.find(x=>x.id===id);
+  if (!c || !c.loginPassEnc) { toast('No password stored', 'warning'); return; }
+  const plain = await decryptOrPlain(c.loginPassEnc);
+  if (plain === null) { toast('Failed to decrypt (wrong password?)', 'error'); return; }
+  navigator.clipboard.writeText(plain).then(() => toast('Password copied!', 'success'))
+    .catch(() => toast('Clipboard copy failed', 'error'));
+}
+
+function renderCards() {
+  const container = document.getElementById('cards-list');
+  const cards = appData.creditCards;
+  if (!cards.length) {
+    container.innerHTML = '<p class="text-muted text-sm" style="padding:20px">No credit cards yet. Click "+ Add Card" to get started.</p>';
+    return;
+  }
+  container.innerHTML = cards.map(c => {
+    const limit = parseFloat(c.creditLimit)||0;
+    const bal = parseFloat(c.currentBalance)||0;
+    const util = limit > 0 ? Math.min(100, (bal/limit)*100) : 0;
+    const utilColor = util >= 90 ? 'var(--danger)' : util >= 70 ? 'var(--warning)' : 'var(--success)';
+    const days = daysUntil(c.dueDate);
+    const payAcct = c.payFromAcctId ? appData.bankAccounts.find(a=>a.id===c.payFromAcctId) : null;
+    const autoBadge = c.autopay && c.autopay!=='none' ?
+      `<span class="badge badge-blue">Autopay: ${c.autopay}</span>` : '';
+    return `
+    <div class="card" style="margin-bottom:16px;border-left:4px solid ${c.color||'var(--purple)'}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-size:16px;font-weight:700">${c.name}${c.last4?` <span class="text-muted text-sm">...${c.last4}</span>`:''}</div>
+          <div class="text-muted text-sm">${c.bankName||''}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          ${autoBadge}
+          ${days!==null ? daysBadge(days) : ''}
+          ${c.loginUrl ? `<a href="${c.loginUrl}" target="_blank"><button class="btn-icon btn-sm">🔗 Login</button></a>` : ''}
+          ${c.loginPassEnc ? `<button class="btn-icon btn-sm" onclick="copyCardPassword('${c.id}')">📋 Password</button>` : ''}
+          <button class="btn-icon btn-sm" onclick="editCard('${c.id}')">✏️</button>
+          <button class="btn-icon btn-sm" onclick="deleteCard('${c.id}')">🗑️</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px;margin-top:16px">
+        <div><div class="text-muted text-sm">Current Balance</div><div style="font-size:18px;font-weight:700;color:var(--danger)">${fmt$(c.currentBalance)}</div></div>
+        <div><div class="text-muted text-sm">Statement Balance</div><div style="font-size:16px;font-weight:600">${fmt$(c.statementBal)}</div></div>
+        <div><div class="text-muted text-sm">Minimum Payment</div><div style="font-size:16px;font-weight:600">${fmt$(c.minimumPayment)}</div></div>
+        <div><div class="text-muted text-sm">Credit Limit</div><div style="font-size:16px;font-weight:600">${fmt$(c.creditLimit)}</div></div>
+        <div><div class="text-muted text-sm">Pay From</div><div>${payAcct ? payAcct.name : '<span class="text-muted">—</span>'}</div></div>
+        <div><div class="text-muted text-sm">Due Date</div><div>${c.dueDate ? fmtDate(c.dueDate) : '—'}</div></div>
+      </div>
+      <div style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span class="text-sm text-muted">Credit Utilization</span>
+          <span class="text-sm" style="color:${utilColor};font-weight:600">${util.toFixed(1)}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${util}%;background:${utilColor}"></div></div>
+      </div>
+      ${c.notes ? `<div class="text-muted text-sm" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">${c.notes}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// BILLS
+// ============================================================
+function toggleBillForm(show) {
+  const panel = document.getElementById('bill-form-panel');
+  populateAccountDropdowns();
+  if (show === false) { panel.classList.remove('open'); clearBillForm(); return; }
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && !document.getElementById('bill-edit-id').value) {
+    document.getElementById('bill-form-title').textContent = 'Add Bill';
+  }
+}
+
+function clearBillForm() {
+  ['bill-edit-id','bill-name','bill-amount','bill-due-day','bill-due-date','bill-payee-name',
+   'bill-payee-url','bill-login-user','bill-login-pass','bill-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('bill-category').value = 'utilities';
+  document.getElementById('bill-frequency').value = 'monthly';
+  document.getElementById('bill-pay-from').value = '';
+  document.getElementById('bill-color').value = '#10b981';
+  document.getElementById('bill-variable').checked = false;
+  document.getElementById('bill-recurring').checked = true;
+  document.getElementById('bill-autopay').checked = false;
+  document.getElementById('bill-active').checked = true;
+}
+
+async function saveBill() {
+  const id = document.getElementById('bill-edit-id').value;
+  const name = document.getElementById('bill-name').value.trim();
+  if (!name) { toast('Bill name is required', 'error'); return; }
+
+  const rawPass = document.getElementById('bill-login-pass').value;
+  let loginPassEnc = '';
+  if (rawPass && rawPass !== '••••••••') {
+    loginPassEnc = await encryptOrPlain(rawPass);
+  } else if (id) {
+    const existing = appData.bills.find(b=>b.id===id);
+    loginPassEnc = existing ? existing.loginPassEnc : '';
+  }
+
+  const obj = {
+    id: id || uid(),
+    name,
+    category: document.getElementById('bill-category').value,
+    amount: parseFloat(document.getElementById('bill-amount').value)||0,
+    isVariable: document.getElementById('bill-variable').checked,
+    dueDay: parseInt(document.getElementById('bill-due-day').value)||0,
+    dueDate: document.getElementById('bill-due-date').value,
+    isRecurring: document.getElementById('bill-recurring').checked,
+    frequency: document.getElementById('bill-frequency').value,
+    payFromAcctId: document.getElementById('bill-pay-from').value,
+    autopay: document.getElementById('bill-autopay').checked,
+    payeeName: document.getElementById('bill-payee-name').value.trim(),
+    payeeUrl: document.getElementById('bill-payee-url').value.trim(),
+    loginUser: document.getElementById('bill-login-user').value.trim(),
+    loginPassEnc,
+    notes: document.getElementById('bill-notes').value.trim(),
+    color: document.getElementById('bill-color').value,
+    isActive: document.getElementById('bill-active').checked,
+    updatedAt: new Date().toISOString()
+  };
+  if (id) {
+    const idx = appData.bills.findIndex(b=>b.id===id);
+    obj.createdAt = appData.bills[idx].createdAt;
+    appData.bills[idx] = obj;
+    toast('Bill updated', 'success');
+  } else {
+    obj.createdAt = new Date().toISOString();
+    appData.bills.push(obj);
+    toast('Bill added', 'success');
+  }
+  saveData(appData);
+  toggleBillForm(false);
+  renderBills();
+}
+
+async function editBill(id) {
+  const b = appData.bills.find(x=>x.id===id);
+  if (!b) return;
+  populateAccountDropdowns();
+  document.getElementById('bill-edit-id').value = b.id;
+  document.getElementById('bill-name').value = b.name;
+  document.getElementById('bill-category').value = b.category||'other';
+  document.getElementById('bill-amount').value = b.amount||'';
+  document.getElementById('bill-variable').checked = !!b.isVariable;
+  document.getElementById('bill-due-day').value = b.dueDay||'';
+  document.getElementById('bill-due-date').value = b.dueDate||'';
+  document.getElementById('bill-recurring').checked = b.isRecurring !== false;
+  document.getElementById('bill-frequency').value = b.frequency||'monthly';
+  document.getElementById('bill-pay-from').value = b.payFromAcctId||'';
+  document.getElementById('bill-autopay').checked = !!b.autopay;
+  document.getElementById('bill-payee-name').value = b.payeeName||'';
+  document.getElementById('bill-payee-url').value = b.payeeUrl||'';
+  document.getElementById('bill-login-user').value = b.loginUser||'';
+  document.getElementById('bill-login-pass').value = b.loginPassEnc ? '••••••••' : '';
+  document.getElementById('bill-notes').value = b.notes||'';
+  document.getElementById('bill-color').value = b.color||'#10b981';
+  document.getElementById('bill-active').checked = b.isActive !== false;
+  document.getElementById('bill-form-title').textContent = 'Edit Bill';
+  const panel = document.getElementById('bill-form-panel');
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function deleteBill(id) {
+  confirm('Delete this bill? This cannot be undone.', () => {
+    appData.bills = appData.bills.filter(b=>b.id!==id);
+    saveData(appData);
+    renderBills();
+    toast('Bill deleted', 'warning');
+  });
+}
+
+async function copyBillPassword(id) {
+  const b = appData.bills.find(x=>x.id===id);
+  if (!b || !b.loginPassEnc) { toast('No password stored', 'warning'); return; }
+  const plain = await decryptOrPlain(b.loginPassEnc);
+  if (plain === null) { toast('Failed to decrypt', 'error'); return; }
+  navigator.clipboard.writeText(plain).then(() => toast('Password copied!', 'success'))
+    .catch(() => toast('Clipboard copy failed', 'error'));
+}
+
+const CAT_COLORS = {
+  utilities:'#f59e0b', insurance:'#3b82f6', subscriptions:'#8b5cf6', rent:'#10b981',
+  loan:'#ef4444', internet:'#06b6d4', phone:'#ec4899', other:'#94a3b8'
+};
+
+function renderBills() {
+  const tbody = document.getElementById('bills-tbody');
+  const bills = appData.bills;
+  if (!bills.length) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:32px">No bills yet. Click "+ Add Bill" to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = bills.map(b => {
+    const days = daysUntil(b.dueDate);
+    const payAcct = b.payFromAcctId ? appData.bankAccounts.find(a=>a.id===b.payFromAcctId) : null;
+    const passBtn = b.loginPassEnc ? `<button class="btn-icon btn-sm" onclick="copyBillPassword('${b.id}')" title="Copy password">📋</button>` : '';
+    const urlBtn = b.payeeUrl ? `<a href="${b.payeeUrl}" target="_blank"><button class="btn-icon btn-sm" title="Open site">🔗</button></a>` : '';
+    return `<tr style="${!b.isActive?'opacity:.5':''}">
+      <td>
+        <span class="color-dot" style="background:${b.color||CAT_COLORS[b.category]||'#94a3b8'}"></span>
+        <strong>${b.name}</strong>
+        ${b.isVariable?'<span class="badge badge-purple" style="font-size:10px;margin-left:4px">variable</span>':''}
+        <div class="text-muted text-sm">${b.payeeName||''}</div>
+      </td>
+      <td><span style="color:${CAT_COLORS[b.category]||'#94a3b8'}">${catIcon(b.category)}</span> ${b.category}</td>
+      <td><strong>${fmt$(b.amount)}</strong></td>
+      <td>${b.dueDate ? fmtDate(b.dueDate) : (b.dueDay?`Day ${b.dueDay}`:'—')}</td>
+      <td>${days!==null?daysBadge(days):'—'}</td>
+      <td>${b.isRecurring ? b.frequency : 'one-time'}</td>
+      <td>${payAcct ? payAcct.name : '—'}</td>
+      <td>${b.autopay ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-gray">No</span>'}</td>
+      <td>${b.isActive!==false ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}</td>
+      <td style="white-space:nowrap">
+        ${passBtn}${urlBtn}
+        <button class="btn-icon btn-sm" onclick="editBill('${b.id}')" title="Edit">✏️</button>
+        <button class="btn-icon btn-sm" onclick="deleteBill('${b.id}')" title="Delete">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ============================================================
+// PAYMENT LOG
+// ============================================================
+let paymentSort = { field:'paymentDate', dir:'desc' };
+
+function populatePaymentSourceDropdown() {
+  const sel = document.getElementById('pay-source');
+  let opts = '<option value="">-- Select --</option>';
+  if (appData.creditCards.length) {
+    opts += '<optgroup label="Credit Cards">';
+    appData.creditCards.forEach(c => {
+      opts += `<option value="card:${c.id}">💳 ${c.name}${c.last4?` ...${c.last4}`:''}</option>`;
+    });
+    opts += '</optgroup>';
+  }
+  if (appData.bills.length) {
+    opts += '<optgroup label="Bills">';
+    appData.bills.forEach(b => {
+      opts += `<option value="bill:${b.id}">${catIcon(b.category)} ${b.name}</option>`;
+    });
+    opts += '</optgroup>';
+  }
+  sel.innerHTML = opts;
+}
+
+function togglePaymentForm(show) {
+  const panel = document.getElementById('payment-form-panel');
+  populateAccountDropdowns();
+  populatePaymentSourceDropdown();
+  if (show === false) { panel.classList.remove('open'); clearPaymentForm(); return; }
+  panel.classList.toggle('open');
+  // Default date to today
+  if (panel.classList.contains('open')) {
+    const today = new Date().toISOString().split('T')[0];
+    if (!document.getElementById('pay-date').value) document.getElementById('pay-date').value = today;
+    if (!document.getElementById('pay-edit-id').value) {
+      document.getElementById('payment-form-title').textContent = 'Log Payment';
+    }
+    // Auto-fill amount from selected source
+    document.getElementById('pay-source').addEventListener('change', autoFillPaymentAmount);
+  }
+}
+
+function autoFillPaymentAmount() {
+  const val = document.getElementById('pay-source').value;
+  if (!val) return;
+  const [type, id] = val.split(':');
+  if (type === 'card') {
+    const c = appData.creditCards.find(x=>x.id===id);
+    if (c) {
+      document.getElementById('pay-amount').value = c.minimumPayment || c.currentBalance || '';
+      if (c.payFromAcctId) document.getElementById('pay-bank').value = c.payFromAcctId;
+    }
+  } else if (type === 'bill') {
+    const b = appData.bills.find(x=>x.id===id);
+    if (b) {
+      document.getElementById('pay-amount').value = b.amount || '';
+      if (b.payFromAcctId) document.getElementById('pay-bank').value = b.payFromAcctId;
+    }
+  }
+}
+
+function clearPaymentForm() {
+  ['pay-edit-id','pay-amount','pay-date','pay-ref','pay-notes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('pay-source').value = '';
+  document.getElementById('pay-bank').value = '';
+  document.getElementById('pay-method').value = 'online';
+  document.getElementById('pay-status').value = 'completed';
+}
+
+async function savePayment() {
+  const id = document.getElementById('pay-edit-id').value;
+  const sourceVal = document.getElementById('pay-source').value;
+  const amount = parseFloat(document.getElementById('pay-amount').value);
+  const date = document.getElementById('pay-date').value;
+  if (!amount || amount <= 0) { toast('Enter a valid amount', 'error'); return; }
+  if (!date) { toast('Payment date is required', 'error'); return; }
+
+  let sourceType = '', sourceId = '', sourceName = '';
+  if (sourceVal) {
+    [sourceType, sourceId] = sourceVal.split(':');
+    if (sourceType === 'card') {
+      const c = appData.creditCards.find(x=>x.id===sourceId);
+      sourceName = c ? c.name + (c.last4?` ...${c.last4}`:'') : '';
+    } else if (sourceType === 'bill') {
+      const b = appData.bills.find(x=>x.id===sourceId);
+      sourceName = b ? b.name : '';
+    }
+  }
+
+  const bankAccountId = document.getElementById('pay-bank').value;
+  const status = document.getElementById('pay-status').value;
+
+  const obj = {
+    id: id || uid(),
+    sourceType, sourceId, sourceName,
+    bankAccountId,
+    amount,
+    paymentDate: date,
+    method: document.getElementById('pay-method').value,
+    status,
+    reference: document.getElementById('pay-ref').value.trim(),
+    notes: document.getElementById('pay-notes').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  if (id) {
+    const oldPay = appData.payments.find(p=>p.id===id);
+    // Reverse old balance deduction if it was completed
+    if (oldPay && oldPay.status === 'completed' && oldPay.bankAccountId) {
+      const acct = appData.bankAccounts.find(a=>a.id===oldPay.bankAccountId);
+      if (acct) acct.balance = (parseFloat(acct.balance)||0) + oldPay.amount;
+    }
+    const idx = appData.payments.findIndex(p=>p.id===id);
+    appData.payments[idx] = obj;
+    toast('Payment updated', 'success');
+  } else {
+    appData.payments.push(obj);
+    toast('Payment logged', 'success');
+  }
+
+  // Deduct from bank account if completed
+  if (status === 'completed' && bankAccountId) {
+    const acct = appData.bankAccounts.find(a=>a.id===bankAccountId);
+    if (acct) {
+      acct.balance = (parseFloat(acct.balance)||0) - amount;
+      acct.updatedAt = new Date().toISOString();
+      toast(`Deducted ${fmt$(amount)} from ${acct.name}`, 'info');
+    }
+  }
+
+  saveData(appData);
+  togglePaymentForm(false);
+  renderPayments();
+}
+
+function editPayment(id) {
+  const p = appData.payments.find(x=>x.id===id);
+  if (!p) return;
+  populateAccountDropdowns();
+  populatePaymentSourceDropdown();
+  document.getElementById('pay-edit-id').value = p.id;
+  const sel = document.getElementById('pay-source');
+  if (p.sourceType && p.sourceId) sel.value = `${p.sourceType}:${p.sourceId}`;
+  document.getElementById('pay-bank').value = p.bankAccountId||'';
+  document.getElementById('pay-amount').value = p.amount;
+  document.getElementById('pay-date').value = p.paymentDate;
+  document.getElementById('pay-method').value = p.method||'online';
+  document.getElementById('pay-status').value = p.status||'completed';
+  document.getElementById('pay-ref').value = p.reference||'';
+  document.getElementById('pay-notes').value = p.notes||'';
+  document.getElementById('payment-form-title').textContent = 'Edit Payment';
+  const panel = document.getElementById('payment-form-panel');
+  panel.classList.add('open');
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function deletePayment(id) {
+  const p = appData.payments.find(x=>x.id===id);
+  if (!p) return;
+  const modalContent = p.status === 'completed' && p.bankAccountId ?
+    `<p>Delete this payment?</p><label style="display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer"><input type="checkbox" id="reverse-bal" style="width:auto" checked> Reverse the ${fmt$(p.amount)} balance deduction from <strong>${accountName(p.bankAccountId)}</strong></label>` :
+    '<p>Delete this payment? This cannot be undone.</p>';
+  showModal('Delete Payment', modalContent, [
+    { label:'Delete', cls:'btn-danger', action: () => {
+      const reverse = document.getElementById('reverse-bal');
+      if (reverse && reverse.checked && p.status === 'completed' && p.bankAccountId) {
+        const acct = appData.bankAccounts.find(a=>a.id===p.bankAccountId);
+        if (acct) acct.balance = (parseFloat(acct.balance)||0) + p.amount;
+      }
+      appData.payments = appData.payments.filter(x=>x.id!==id);
+      saveData(appData);
+      renderPayments();
+      toast('Payment deleted', 'warning');
+      return true;
+    }},
+    { label:'Cancel', cls:'btn-ghost', action: ()=>true }
+  ]);
+}
+
+function sortPayments(field) {
+  if (paymentSort.field === field) paymentSort.dir = paymentSort.dir === 'asc' ? 'desc' : 'asc';
+  else { paymentSort.field = field; paymentSort.dir = 'desc'; }
+  renderPayments();
+}
+
+function renderPayments() {
+  const tbody = document.getElementById('payments-tbody');
+  let payments = [...appData.payments];
+  payments.sort((a,b) => {
+    let av = a[paymentSort.field], bv = b[paymentSort.field];
+    if (paymentSort.field === 'amount') { av = parseFloat(av)||0; bv = parseFloat(bv)||0; }
+    if (av < bv) return paymentSort.dir === 'asc' ? -1 : 1;
+    if (av > bv) return paymentSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  if (!payments.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px">No payments logged yet. Click "+ Log Payment" to get started.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = payments.map(p => `
+    <tr>
+      <td>${fmtDate(p.paymentDate)}</td>
+      <td><strong>${p.sourceName||'—'}</strong></td>
+      <td>${accountName(p.bankAccountId)}</td>
+      <td><strong>${fmt$(p.amount)}</strong></td>
+      <td><span class="badge badge-gray">${p.method||'—'}</span></td>
+      <td>${statusBadge(p.status)}</td>
+      <td class="text-muted text-sm">${p.reference||'—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-icon btn-sm" onclick="editPayment('${p.id}')" title="Edit">✏️</button>
+        <button class="btn-icon btn-sm" onclick="deletePayment('${p.id}')" title="Delete">🗑️</button>
+      </td>
+    </tr>`).join('');
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function renderSettings() {
+  const section = document.getElementById('master-pass-section');
+  if (hasMasterPassword()) {
+    section.innerHTML = `
+      <p class="text-sm" style="margin-bottom:16px;color:var(--success)">✓ Master password is set. Credentials are encrypted.</p>
+      <h4 style="margin-bottom:12px">Change Master Password</h4>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <div class="form-group"><label>Current Password</label><input type="password" id="mp-current" placeholder="Current password"></div>
+        <div class="form-group"><label>New Password</label><input type="password" id="mp-new" placeholder="New password"></div>
+        <div class="form-group"><label>Confirm New</label><input type="password" id="mp-confirm" placeholder="Confirm new password"></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px">
+        <button class="btn-primary" onclick="changeMasterPassword()">Change Password</button>
+        <button class="btn-ghost" onclick="clearMasterPassword()">Remove Master Password</button>
+      </div>
+    `;
+  } else {
+    section.innerHTML = `
+      <p class="text-sm text-muted" style="margin-bottom:16px">No master password set. Passwords stored as plaintext.</p>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <div class="form-group"><label>New Master Password</label><input type="password" id="mp-new" placeholder="Choose a strong password"></div>
+        <div class="form-group"><label>Confirm Password</label><input type="password" id="mp-confirm" placeholder="Confirm password"></div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn-primary" onclick="setMasterPassword()">Set Master Password</button>
+      </div>
+    `;
+  }
+}
+
+async function setMasterPassword() {
+  const pw = document.getElementById('mp-new').value;
+  const conf = document.getElementById('mp-confirm').value;
+  if (!pw) { toast('Enter a password', 'error'); return; }
+  if (pw !== conf) { toast('Passwords do not match', 'error'); return; }
+  if (pw.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+
+  // Generate salt
+  const saltArr = crypto.getRandomValues(new Uint8Array(16));
+  const salt = b64encode(saltArr.buffer);
+  const hash = await sha256hex(pw + salt);
+  appData.settings.encryptionSalt = salt;
+  appData.settings.masterPasswordHash = hash;
+  _masterPasswordCache = pw;
+
+  // Re-encrypt all existing plain: passwords
+  let reEncCount = 0;
+  for (const c of appData.creditCards) {
+    if (c.loginPassEnc && c.loginPassEnc.startsWith('plain:')) {
+      const plain = c.loginPassEnc.slice(6);
+      c.loginPassEnc = await encryptPassword(plain, pw, salt);
+      reEncCount++;
+    }
+  }
+  for (const b of appData.bills) {
+    if (b.loginPassEnc && b.loginPassEnc.startsWith('plain:')) {
+      const plain = b.loginPassEnc.slice(6);
+      b.loginPassEnc = await encryptPassword(plain, pw, salt);
+      reEncCount++;
+    }
+  }
+
+  saveData(appData);
+  toast(`Master password set! ${reEncCount > 0 ? reEncCount + ' password(s) encrypted.' : ''}`, 'success');
+  renderSettings();
+}
+
+async function changeMasterPassword() {
+  const current = document.getElementById('mp-current').value;
+  const pw = document.getElementById('mp-new').value;
+  const conf = document.getElementById('mp-confirm').value;
+  if (!current || !pw) { toast('Fill all fields', 'error'); return; }
+  if (pw !== conf) { toast('New passwords do not match', 'error'); return; }
+  if (pw.length < 6) { toast('Password must be at least 6 characters', 'error'); return; }
+
+  const ok = await verifyMasterPassword(current);
+  if (!ok) { toast('Current password is wrong', 'error'); return; }
+
+  const oldSalt = appData.settings.encryptionSalt;
+
+  // Generate new salt
+  const saltArr = crypto.getRandomValues(new Uint8Array(16));
+  const newSalt = b64encode(saltArr.buffer);
+  const newHash = await sha256hex(pw + newSalt);
+
+  // Re-encrypt all encrypted passwords
+  for (const c of appData.creditCards) {
+    if (c.loginPassEnc && !c.loginPassEnc.startsWith('plain:')) {
+      const plain = await decryptPassword(c.loginPassEnc, current, oldSalt);
+      if (plain !== null) c.loginPassEnc = await encryptPassword(plain, pw, newSalt);
+    }
+  }
+  for (const b of appData.bills) {
+    if (b.loginPassEnc && !b.loginPassEnc.startsWith('plain:')) {
+      const plain = await decryptPassword(b.loginPassEnc, current, oldSalt);
+      if (plain !== null) b.loginPassEnc = await encryptPassword(plain, pw, newSalt);
+    }
+  }
+
+  appData.settings.encryptionSalt = newSalt;
+  appData.settings.masterPasswordHash = newHash;
+  _masterPasswordCache = pw;
+  saveData(appData);
+  toast('Master password changed and all credentials re-encrypted!', 'success');
+  renderSettings();
+}
+
+async function clearMasterPassword() {
+  if (!hasMasterPassword()) return;
+  showModal('Remove Master Password', `
+    <p>This will decrypt all stored passwords and store them as plaintext.</p>
+    <p style="margin-top:8px"><strong>Are you sure?</strong></p>
+    <div class="form-group" style="margin-top:12px"><label>Enter current master password to confirm:</label>
+      <input type="password" id="mp-clear-confirm" placeholder="Current password">
+    </div>
+  `, [
+    { label:'Remove', cls:'btn-danger', action: async () => {
+      const pw = document.getElementById('mp-clear-confirm').value;
+      const ok = await verifyMasterPassword(pw);
+      if (!ok) { toast('Wrong password', 'error'); return false; }
+      const salt = appData.settings.encryptionSalt;
+      for (const c of appData.creditCards) {
+        if (c.loginPassEnc && !c.loginPassEnc.startsWith('plain:')) {
+          const plain = await decryptPassword(c.loginPassEnc, pw, salt);
+          if (plain !== null) c.loginPassEnc = 'plain:' + plain;
+        }
+      }
+      for (const b of appData.bills) {
+        if (b.loginPassEnc && !b.loginPassEnc.startsWith('plain:')) {
+          const plain = await decryptPassword(b.loginPassEnc, pw, salt);
+          if (plain !== null) b.loginPassEnc = 'plain:' + plain;
+        }
+      }
+      delete appData.settings.masterPasswordHash;
+      delete appData.settings.encryptionSalt;
+      _masterPasswordCache = null;
+      saveData(appData);
+      toast('Master password removed', 'warning');
+      renderSettings();
+      return true;
+    }},
+    { label:'Cancel', cls:'btn-ghost', action: ()=>true }
+  ]);
+}
+
+function clearAllData() {
+  showModal('⚠️ Clear All Data', `
+    <p style="color:var(--danger)">This will permanently delete ALL your data including accounts, cards, bills, and payments.</p>
+    <p style="margin-top:12px"><strong>This cannot be undone!</strong></p>
+    <p style="margin-top:8px">Type <strong>DELETE</strong> to confirm:</p>
+    <input type="text" id="clear-confirm-input" placeholder="Type DELETE" style="margin-top:8px">
+  `, [
+    { label:'Clear Everything', cls:'btn-danger', action: () => {
+      const v = document.getElementById('clear-confirm-input').value;
+      if (v !== 'DELETE') { toast('Type DELETE to confirm', 'error'); return false; }
+      appData = defaultData();
+      saveData(appData);
+      _masterPasswordCache = null;
+      toast('All data cleared', 'warning');
+      renderDashboard();
+      return true;
+    }},
+    { label:'Cancel', cls:'btn-ghost', action: ()=>true }
+  ]);
+}
+
+// ============================================================
+// EXPORT / IMPORT
+// ============================================================
+function exportData() {
+  const json = JSON.stringify(appData, null, 2);
+  const blob = new Blob([json], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const d = new Date().toISOString().split('T')[0];
+  a.href = url;
+  a.download = `finance-backup-${d}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Data exported!', 'success');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      showModal('Import Data', `
+        <p>Choose how to import:</p>
+        <ul style="margin-top:10px;margin-left:16px;line-height:2">
+          <li><strong>Replace:</strong> Delete all current data and load from file</li>
+          <li><strong>Merge:</strong> Add imported records to existing data (duplicates by ID skipped)</li>
+        </ul>
+      `, [
+        { label:'Replace', cls:'btn-danger', action: () => {
+          appData = { bankAccounts:[], creditCards:[], bills:[], payments:[], settings:{}, ...imported };
+          saveData(appData);
+          _masterPasswordCache = null;
+          toast('Data replaced from file', 'success');
+          switchTab('dashboard');
+          return true;
+        }},
+        { label:'Merge', cls:'btn-primary', action: () => {
+          const merge = (arr, imp) => {
+            const ids = new Set(arr.map(x=>x.id));
+            return [...arr, ...(imp||[]).filter(x=>!ids.has(x.id))];
+          };
+          appData.bankAccounts = merge(appData.bankAccounts, imported.bankAccounts);
+          appData.creditCards = merge(appData.creditCards, imported.creditCards);
+          appData.bills = merge(appData.bills, imported.bills);
+          appData.payments = merge(appData.payments, imported.payments);
+          if (imported.settings) Object.assign(appData.settings, imported.settings);
+          saveData(appData);
+          toast('Data merged from file', 'success');
+          switchTab('dashboard');
+          return true;
+        }},
+        { label:'Cancel', cls:'btn-ghost', action: ()=>true }
+      ]);
+    } catch(err) {
+      toast('Invalid JSON file', 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  renderDashboard();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
