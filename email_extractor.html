@@ -819,6 +819,8 @@ const FORM_NON_VALUES = new Set([
     'retention', "ld's", 'construction type', 'hourly rates submitted',
     'hourly rates approved', 'co markup %', 'bond', 'main office phone:',
     'this function is for admin use only',
+    // Values in the compliance section that are not YES/NO answers
+    'pla', 'gc payment bond in hand',
 ]);
 
 // Primary aliases (first alias of each field) — if a candidate value exactly
@@ -971,6 +973,9 @@ async function processAllFiles(files) {
                 foundDoc = true;
 
                 const fields = extractFields(text);
+                // Debug: show extracted scope values
+                console.log(`[Scopes for "${att.name}"]`,
+                    Object.fromEntries(SCOPE_CATEGORIES.map(s => [s, fields[s + ' %'] || '(empty)'])));
                 // Merge: first non-empty value wins for each field
                 for (const [k, v] of Object.entries(fields)) {
                     if (!merged[k] && v) merged[k] = v;
