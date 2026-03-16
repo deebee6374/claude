@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Attachment Extractor</title>
+
+    <!-- SheetJS: reads .xlsx/.xls attachments and writes the output spreadsheet -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- PDF.js: extracts text from PDF attachments -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #1c1e21;
+        }
+        .container { max-width: 860px; margin: 0 auto; }
+        h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+        .subtitle { color: #65676b; margin-bottom: 22px; font-size: 15px; }
+
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.13);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        /* ── Instructions ── */
+        .instructions {
+            background: #fff8e5;
+            border: 1px solid #f0b429;
+            border-radius: 8px;
+            padding: 14px 18px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.7;
+        }
+        .instructions strong { display: block; margin-bottom: 4px; font-size: 15px; }
+        .instructions ol { padding-left: 20px; }
+
+        /* ── Drop zone ── */
+        #dropZone {
+            border: 2px dashed #1877f2;
+            border-radius: 12px;
+            padding: 48px 24px;
+            text-align: center;
+            background: #f0f7ff;
+            cursor: pointer;
+            transition: background 0.18s, border-color 0.18s;
+            user-select: none;
+        }
+        #dropZone.drag-over { background: #d4e9ff; border-color: #0a5dc2; }
+        .drop-icon  { font-size: 44px; margin-bottom: 10px; }
+        .drop-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+        .drop-sub   { color: #65676b; font-size: 14px; margin-bottom: 18px; }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-block;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background 0.18s, opacity 0.18s;
+            line-height: 1.4;
+        }
+        .btn-primary                      { background: #1877f2; color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: #166fe5; }
+        .btn-primary:disabled             { opacity: 0.45; cursor: not-allowed; }
+        .btn-secondary                    { background: #e4e6e9; color: #1c1e21; }
+        .btn-secondary:hover              { background: #d8dadf; }
+        .btn-sm { padding: 6px 14px; font-size: 13px; }
+
+        /* ── File list ── */
+        #fileList { margin-top: 16px; }
+        .file-pill {
+            display: flex;
+            align-items: center;
+            background: #f0f2f5;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            gap: 8px;
+        }
+        .file-pill-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .file-pill-size { color: #65676b; font-size: 13px; white-space: nowrap; }
+        .file-pill-remove { color: #e41e3f; cursor: pointer; font-size: 20px; line-height: 1; padding: 0 2px; flex-shrink: 0; }
+        .file-pill-remove:hover { color: #b0001b; }
+
+        /* ── Action bar ── */
+        #actionBar { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+        #fileCount  { flex: 1; color: #65676b; font-size: 14px; min-width: 120px; }
+
+        /* ── Progress ── */
+        #progressArea { text-align: center; padding: 28px 0 8px; }
+        .spinner {
+            width: 34px; height: 34px;
+            border: 3px solid #e4e6e9;
+            border-top-color: #1877f2;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            margin: 0 auto 14px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #progressMsg { color: #65676b; font-size: 14px; }
+
+        /* ── Alerts ── */
+        .alert { padding: 12px 16px; border-radius: 6px; font-size: 14px; margin-top: 16px; }
+        .alert-error   { background: #fff0f0; border: 1px solid #e41e3f; color: #b0001b; }
+        .alert-success { background: #f0fff4; border: 1px solid #28a745; color: #155724; }
+
+        /* ── Scope config ── */
+        #scopeConfigCard { margin-bottom: 16px; }
+        #scopeConfigCard summary {
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 15px;
+            padding: 4px 0;
+            user-select: none;
+            color: #1877f2;
+        }
+        #scopeConfigCard summary:hover { color: #0a5dc2; }
+        .scope-config-body { margin-top: 14px; }
+        .scope-config-body p { font-size: 14px; color: #65676b; margin-bottom: 8px; }
+        #scopeInput {
+            width: 100%;
+            font-family: inherit;
+            font-size: 14px;
+            padding: 10px 12px;
+            border: 1px solid #e4e6e9;
+            border-radius: 6px;
+            resize: vertical;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+        #scopeInput:focus { outline: none; border-color: #1877f2; }
+        .scope-save-row { display: flex; align-items: center; gap: 12px; }
+        #scopeSaved { font-size: 13px; color: #28a745; display: none; }
+
+        /* ── Column preview ── */
+        .col-preview { margin-top: 14px; }
+        .col-preview-title { font-size: 13px; font-weight: 600; color: #65676b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.04em; }
+        .col-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .col-tag {
+            background: #e8f0fe;
+            color: #1a56b0;
+            border-radius: 4px;
+            padding: 3px 9px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .col-tag.scope { background: #e6f9f0; color: #1a7a47; }
+
+        .privacy-note { text-align: center; font-size: 12px; color: #8a8d91; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Project Document Extractor</h1>
+    <p class="subtitle">Drop Outlook <strong>.msg</strong> emails below. PDF and Excel attachments are scanned and key project fields are extracted into a spreadsheet.</p>
+
+    <div class="instructions">
+        <strong>How to use:</strong>
+        <ol>
+            <li>Optionally configure your scope categories below</li>
+            <li>Drag and drop your <strong>.msg</strong> files onto the zone (or click <em>Browse files</em>)</li>
+            <li>Click <strong>Process &amp; Download</strong></li>
+            <li>A <strong>.xlsx</strong> file downloads — one row per email — with all extracted project fields</li>
+        </ol>
+    </div>
+
+    <!-- Scope config -->
+    <div class="card" id="scopeConfigCard">
+        <details>
+            <summary>⚙ Configure Scope Categories</summary>
+            <div class="scope-config-body">
+                <p>One scope per line. The tool will search each document for these names and extract the associated percentage. These become columns in the output (e.g. <em>"Concrete %"</em>).</p>
+                <textarea id="scopeInput" rows="6" placeholder="Concrete&#10;Masonry&#10;Steel&#10;Carpentry&#10;Roofing&#10;Plumbing&#10;HVAC&#10;Electrical"></textarea>
+                <div class="scope-save-row">
+                    <button id="saveScopesBtn" class="btn btn-secondary btn-sm">Save</button>
+                    <span id="scopeSaved">Saved!</span>
+                </div>
+            </div>
+        </details>
+
+        <div class="col-preview" id="colPreview">
+            <div class="col-preview-title">Output columns</div>
+            <div class="col-tags" id="colTags"></div>
+        </div>
+    </div>
+
+    <!-- Main drop card -->
+    <div class="card">
+        <div id="dropZone">
+            <div class="drop-icon">📎</div>
+            <div class="drop-title">Drag &amp; drop .msg files here</div>
+            <div class="drop-sub">Extracts project data from PDF and Excel attachments &bull; Runs entirely in your browser</div>
+            <label class="btn btn-secondary" style="cursor:pointer">
+                Browse files
+                <input type="file" id="fileInput" accept=".msg" multiple style="display:none">
+            </label>
+        </div>
+
+        <div id="fileList"></div>
+
+        <div id="actionBar" style="display:none">
+            <span id="fileCount"></span>
+            <button id="processBtn" class="btn btn-primary">Process &amp; Download</button>
+            <button id="clearBtn"   class="btn btn-secondary">Clear</button>
+        </div>
+
+        <div id="progressArea" style="display:none">
+            <div class="spinner"></div>
+            <div id="progressMsg">Processing…</div>
+        </div>
+
+        <div id="alertArea"></div>
+    </div>
+
+    <p class="privacy-note">🔒 All processing happens locally in your browser. No data is uploaded anywhere.</p>
+</div>
+
+<script type="module">
+// ─────────────────────────────────────────────────────────────────────────────
+// @kenjiuno/msgreader — parses Outlook .msg (OLE/MAPI binary format)
+// ─────────────────────────────────────────────────────────────────────────────
+import MsgReader from 'https://esm.sh/@kenjiuno/msgreader';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF.js worker
+// ─────────────────────────────────────────────────────────────────────────────
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIELD CONFIG
+// Edit the aliases array for each field to match the labels used in your docs.
+// type: 'text' | 'currency' | 'date' | 'boolean'
+// ─────────────────────────────────────────────────────────────────────────────
+const FIELD_CONFIG = {
+    'Job Number': {
+        aliases: ['job #', 'job no', 'job number', 'job no.', 'project #', 'project no',
+                  'project no.', 'project number', 'contract no', 'contract no.', 'contract #',
+                  'work order', 'work order #', 'po #', 'po number', 'bid #', 'bid no'],
+        type: 'text'
+    },
+    'Job Name': {
+        aliases: ['project name', 'job name', 'project title', 'job title',
+                  'description of work', 'scope of work', 'project description',
+                  'job description', 'work description'],
+        type: 'text'
+    },
+    'Address': {
+        aliases: ['project address', 'job address', 'site address', 'project location',
+                  'job location', 'job site', 'site location', 'location:', 'address:',
+                  'property address', 'building address'],
+        type: 'text'
+    },
+    'GC Company': {
+        aliases: ['general contractor', 'gc:', 'prime contractor', 'prime:', 'owner:',
+                  'client:', 'client name', 'owner name', 'contractor:', 'hiring party',
+                  'upper tier', 'upper-tier contractor'],
+        type: 'text'
+    },
+    'Architect': {
+        aliases: ['architect:', 'architect of record', 'designer:', 'engineer of record',
+                  'a/e:', 'design professional', 'project architect', 'engineer:',
+                  'structural engineer', 'architect/engineer'],
+        type: 'text'
+    },
+    'Contract $': {
+        aliases: ['contract amount', 'contract sum', 'contract value', 'contract price',
+                  'subcontract amount', 'subcontract sum', 'subcontract value',
+                  'subcontract price', 'award amount', 'bid amount', 'total contract',
+                  'lump sum', 'contract total', 'total amount', 'total price',
+                  'base contract', 'original contract'],
+        type: 'currency'
+    },
+    'Start Date': {
+        aliases: ['start date', 'commencement date', 'notice to proceed', 'ntp date',
+                  'ntp:', 'mobilization date', 'work start', 'project start',
+                  'construction start', 'start of work', 'begin date'],
+        type: 'date'
+    },
+    'End Date': {
+        aliases: ['end date', 'completion date', 'substantial completion',
+                  'final completion', 'project completion', 'project end', 'finish date',
+                  'completion deadline', 'contract completion', 'work completion'],
+        type: 'date'
+    },
+    'Bonded': {
+        aliases: ['bonded', 'performance bond', 'payment bond', 'bond required',
+                  'bond:', 'surety bond', 'bonding required'],
+        type: 'boolean'
+    },
+    'NDA': {
+        aliases: ['nda', 'non-disclosure', 'non disclosure', 'confidentiality agreement',
+                  'confidential agreement', 'nda required', 'confidentiality:'],
+        type: 'boolean'
+    },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCOPE CATEGORIES (user-editable via UI, persisted to localStorage)
+// ─────────────────────────────────────────────────────────────────────────────
+const SCOPE_STORAGE_KEY = 'extractor_scopes_v1';
+const DEFAULT_SCOPES = [
+    'Concrete', 'Masonry', 'Steel', 'Carpentry', 'Roofing',
+    'Plumbing', 'HVAC', 'Electrical', 'Finishes', 'Site Work'
+];
+
+function loadScopes() {
+    try {
+        const saved = localStorage.getItem(SCOPE_STORAGE_KEY);
+        if (saved) {
+            const arr = JSON.parse(saved);
+            if (Array.isArray(arr) && arr.length > 0) return arr;
+        }
+    } catch (_) {}
+    return [...DEFAULT_SCOPES];
+}
+
+let SCOPE_CATEGORIES = loadScopes();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scope config UI
+// ─────────────────────────────────────────────────────────────────────────────
+const scopeInput    = document.getElementById('scopeInput');
+const saveScopesBtn = document.getElementById('saveScopesBtn');
+const scopeSaved    = document.getElementById('scopeSaved');
+
+function scopesToText(arr) { return arr.join('\n'); }
+function textToScopes(txt) {
+    return txt.split('\n').map(s => s.trim()).filter(Boolean);
+}
+
+scopeInput.value = scopesToText(SCOPE_CATEGORIES);
+renderColPreview();
+
+saveScopesBtn.addEventListener('click', () => {
+    const scopes = textToScopes(scopeInput.value);
+    if (scopes.length === 0) return;
+    SCOPE_CATEGORIES = scopes;
+    localStorage.setItem(SCOPE_STORAGE_KEY, JSON.stringify(scopes));
+    renderColPreview();
+    scopeSaved.style.display = 'inline';
+    setTimeout(() => { scopeSaved.style.display = 'none'; }, 2000);
+});
+
+function renderColPreview() {
+    const tags = document.getElementById('colTags');
+    tags.innerHTML = '';
+    const fixed = ['Source File', ...Object.keys(FIELD_CONFIG)];
+    fixed.forEach(name => {
+        const span = document.createElement('span');
+        span.className = 'col-tag';
+        span.textContent = name;
+        tags.appendChild(span);
+    });
+    SCOPE_CATEGORIES.forEach(scope => {
+        const span = document.createElement('span');
+        span.className = 'col-tag scope';
+        span.textContent = scope + ' %';
+        tags.appendChild(span);
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State & DOM refs
+// ─────────────────────────────────────────────────────────────────────────────
+let selectedFiles = [];
+
+const dropZone     = document.getElementById('dropZone');
+const fileInput    = document.getElementById('fileInput');
+const fileList     = document.getElementById('fileList');
+const actionBar    = document.getElementById('actionBar');
+const fileCount    = document.getElementById('fileCount');
+const processBtn   = document.getElementById('processBtn');
+const clearBtn     = document.getElementById('clearBtn');
+const progressArea = document.getElementById('progressArea');
+const progressMsg  = document.getElementById('progressMsg');
+const alertArea    = document.getElementById('alertArea');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Drag & drop + file input
+// ─────────────────────────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragenter', e => e.preventDefault());
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+});
+dropZone.addEventListener('click', e => {
+    if (e.target === dropZone ||
+        e.target.classList.contains('drop-icon') ||
+        e.target.classList.contains('drop-title') ||
+        e.target.classList.contains('drop-sub')) {
+        fileInput.click();
+    }
+});
+fileInput.addEventListener('change', () => {
+    addFiles([...fileInput.files]);
+    fileInput.value = '';
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// File management
+// ─────────────────────────────────────────────────────────────────────────────
+function addFiles(files) {
+    const msgFiles = files.filter(f => f.name.toLowerCase().endsWith('.msg'));
+    const skipped  = files.length - msgFiles.length;
+    for (const f of msgFiles) {
+        if (!selectedFiles.find(s => s.name === f.name && s.size === f.size))
+            selectedFiles.push(f);
+    }
+    renderFileList();
+    if (skipped > 0) showAlert(`${skipped} file(s) ignored — only .msg files are supported.`, 'error');
+    else clearAlert();
+}
+
+function removeFile(idx) {
+    selectedFiles.splice(idx, 1);
+    renderFileList();
+    clearAlert();
+}
+
+function renderFileList() {
+    fileList.innerHTML = '';
+    for (let i = 0; i < selectedFiles.length; i++) {
+        const f = selectedFiles[i];
+        const pill = document.createElement('div');
+        pill.className = 'file-pill';
+        pill.innerHTML = `
+            <span class="file-pill-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+            <span class="file-pill-size">${fmtSize(f.size)}</span>
+            <span class="file-pill-remove" data-idx="${i}" title="Remove">×</span>`;
+        fileList.appendChild(pill);
+    }
+    fileList.querySelectorAll('.file-pill-remove').forEach(el =>
+        el.addEventListener('click', () => removeFile(parseInt(el.dataset.idx))));
+
+    const has = selectedFiles.length > 0;
+    actionBar.style.display = has ? 'flex' : 'none';
+    fileCount.textContent   = `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''} queued`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Process & download
+// ─────────────────────────────────────────────────────────────────────────────
+processBtn.addEventListener('click', async () => {
+    if (!selectedFiles.length) return;
+    setProcessing(true);
+    clearAlert();
+    try {
+        // Re-read scopes from textarea in case user edited without saving
+        const liveScopes = textToScopes(scopeInput.value);
+        if (liveScopes.length) SCOPE_CATEGORIES = liveScopes;
+
+        const rows = await processAllFiles(selectedFiles);
+        downloadSpreadsheet(rows);
+        showAlert(`✓ Done! ${rows.length} email(s) processed.`, 'success');
+    } catch (err) {
+        showAlert(`Error: ${err.message}`, 'error');
+        console.error(err);
+    } finally {
+        setProcessing(false);
+    }
+});
+
+clearBtn.addEventListener('click', () => {
+    selectedFiles = [];
+    renderFileList();
+    clearAlert();
+});
+
+function setProcessing(on) {
+    progressArea.style.display   = on ? 'block' : 'none';
+    actionBar.style.display      = on ? 'none' : (selectedFiles.length ? 'flex' : 'none');
+    dropZone.style.pointerEvents = on ? 'none' : '';
+    dropZone.style.opacity       = on ? '0.5' : '';
+}
+
+function updateProgress(msg) { progressMsg.textContent = msg; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parse one .msg — return array of { name, text } for PDF/Excel attachments
+// ─────────────────────────────────────────────────────────────────────────────
+function parseMsgAttachments(arrayBuffer) {
+    const reader = new MsgReader(arrayBuffer);
+    const msg    = reader.getFileData();
+    return (msg.attachments ?? []).map((att, i) => {
+        try {
+            const result = reader.getAttachment(att);
+            return { name: result.fileName ?? att.fileName ?? `attachment_${i+1}`, data: result.content };
+        } catch (_) {
+            return { name: att.fileName ?? `attachment_${i+1}`, data: null };
+        }
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF text extraction
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractPdfText(uint8) {
+    if (typeof pdfjsLib === 'undefined') return '';
+    try {
+        const pdf = await pdfjsLib.getDocument({ data: uint8 }).promise;
+        const pages = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+            const page    = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            pages.push(content.items.map(i => i.str).join(' '));
+        }
+        return pages.join('\n');
+    } catch (_) { return ''; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Excel data extraction
+// ─────────────────────────────────────────────────────────────────────────────
+function extractExcelText(uint8) {
+    if (typeof XLSX === 'undefined') return '';
+    try {
+        const wb = XLSX.read(uint8, { type: 'array' });
+        const parts = [];
+        for (const sheetName of wb.SheetNames) {
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+            for (const row of rows) {
+                const cells = row.map(c => String(c ?? '').trim()).filter(Boolean);
+                if (cells.length) parts.push(cells.join('\t'));
+            }
+        }
+        return parts.join('\n');
+    } catch (_) { return ''; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Field extraction engine
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Split text into clean lines
+function toLines(text) {
+    return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+}
+
+// Find all lines that contain any alias (case-insensitive); return index + line
+function findAliasLines(lines, aliases) {
+    const hits = [];
+    for (let i = 0; i < lines.length; i++) {
+        const lower = lines[i].toLowerCase();
+        if (aliases.some(a => lower.includes(a.toLowerCase()))) {
+            hits.push(i);
+        }
+    }
+    return hits;
+}
+
+// Given the line where an alias was found, grab the value on that line (after
+// colon / equals / dash / tab) or from the next non-empty line if nothing follows.
+function valueFromLine(lines, idx) {
+    const line = lines[idx];
+    // Try to extract after a separator on the same line
+    const sep = line.match(/[:=\t]\s*(.+)$/);
+    if (sep && sep[1].trim().length > 1) return sep[1].trim();
+    // Try next line
+    for (let j = idx + 1; j < Math.min(idx + 3, lines.length); j++) {
+        const next = lines[j].trim();
+        if (next && next.length > 1) return next;
+    }
+    return '';
+}
+
+// Currency: find a dollar amount in a string
+function parseCurrency(text) {
+    // Handle "X million / X.X million"
+    const mil = text.match(/\$?\s*([\d,]+\.?\d*)\s*million/i);
+    if (mil) {
+        const n = parseFloat(mil[1].replace(/,/g, ''));
+        if (!isNaN(n)) return '$' + (n * 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    const m = text.match(/\$\s*[\d,]+\.?\d{0,2}|[\d,]{4,}\.?\d{0,2}/);
+    if (!m) return '';
+    const n = parseFloat(m[0].replace(/[$,\s]/g, ''));
+    if (isNaN(n) || n === 0) return '';
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Date: attempt to parse common formats; return MM/DD/YYYY or original string
+function parseDate(text) {
+    // Strip extra words, keep the date-like part
+    const cleaned = text.replace(/(?:start|end|date|from|to|by|on|:)/gi, '').trim();
+
+    const formats = [
+        // YYYY-MM-DD
+        { re: /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/, fn: m => `${m[2].padStart(2,'0')}/${m[3].padStart(2,'0')}/${m[1]}` },
+        // MM/DD/YYYY or M/D/YY
+        { re: /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/, fn: m => {
+            const yr = m[3].length === 2 ? '20' + m[3] : m[3];
+            return `${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}/${yr}`;
+        }},
+        // Month DD, YYYY  or  Month DD YYYY
+        { re: /([A-Za-z]+)\s+(\d{1,2})[,\s]+(\d{4})/, fn: m => {
+            const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+            const mo = months[m[1].toLowerCase().slice(0,3)];
+            if (!mo) return null;
+            return `${String(mo).padStart(2,'0')}/${m[2].padStart(2,'0')}/${m[3]}`;
+        }},
+    ];
+
+    for (const { re, fn } of formats) {
+        const match = cleaned.match(re);
+        if (match) {
+            const result = fn(match);
+            if (result) return result;
+        }
+    }
+    // Return the cleaned text if it looks date-ish, otherwise empty
+    return /\d/.test(cleaned) && cleaned.length < 30 ? cleaned : '';
+}
+
+// Boolean: look for yes/no/checked/required signals near the alias line
+function parseBoolean(line, nextLine) {
+    const both = (line + ' ' + (nextLine || '')).toLowerCase();
+    if (/\byes\b|✓|☑|checked|required|✔|confirmed|true|\bx\b/.test(both)) return 'Yes';
+    if (/\bno\b|\bnone\b|\bn\/a\b|\bnot required\b|\bfalse\b|unchecked/.test(both)) return 'No';
+    // Presence of the keyword itself often implies "Yes" in construction docs
+    return '?';
+}
+
+// Scope percentage: look for a percentage near a scope keyword
+function findScopePercent(lines, scopeName) {
+    const lowerScope = scopeName.toLowerCase();
+    for (let i = 0; i < lines.length; i++) {
+        const lower = lines[i].toLowerCase();
+        if (!lower.includes(lowerScope)) continue;
+        // Check this line and the next two for a percentage
+        for (let j = i; j < Math.min(i + 3, lines.length); j++) {
+            const pct = lines[j].match(/(\d+\.?\d*)\s*%/);
+            if (pct) return pct[1].includes('.') ? pct[1] + '%' : pct[1] + '%';
+        }
+    }
+    return '';
+}
+
+// Main extraction: given full document text, return object with all field values
+function extractFields(text) {
+    const lines  = toLines(text);
+    const result = {};
+
+    for (const [fieldName, config] of Object.entries(FIELD_CONFIG)) {
+        const hitIdxs = findAliasLines(lines, config.aliases);
+        let value = '';
+
+        for (const idx of hitIdxs) {
+            const raw = valueFromLine(lines, idx);
+            if (!raw) continue;
+
+            if (config.type === 'currency') {
+                value = parseCurrency(raw);
+                // If not found on the label line, also try parseCurrency on the whole raw
+                if (!value) value = parseCurrency(lines[idx]);
+            } else if (config.type === 'date') {
+                value = parseDate(raw);
+            } else if (config.type === 'boolean') {
+                const nextLine = lines[idx + 1] ?? '';
+                value = parseBoolean(lines[idx], nextLine);
+            } else {
+                value = raw.length <= 200 ? raw : raw.slice(0, 200);
+            }
+
+            if (value) break; // stop at first successful extraction
+        }
+
+        result[fieldName] = value;
+    }
+
+    // Scopes
+    for (const scope of SCOPE_CATEGORIES) {
+        result[scope + ' %'] = findScopePercent(lines, scope);
+    }
+
+    return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Process all queued .msg files
+// ─────────────────────────────────────────────────────────────────────────────
+async function processAllFiles(files) {
+    const rows = [];
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        updateProgress(`Processing ${i + 1} of ${files.length}: ${file.name}`);
+
+        // Accumulated field values across all attachments in this email
+        const merged = {};
+        for (const key of Object.keys(FIELD_CONFIG)) merged[key] = '';
+        for (const scope of SCOPE_CATEGORIES) merged[scope + ' %'] = '';
+
+        try {
+            const buf         = await file.arrayBuffer();
+            const attachments = parseMsgAttachments(buf);
+
+            let foundDoc = false;
+            for (const att of attachments) {
+                if (!att.data) continue;
+                const ext = att.name.split('.').pop().toLowerCase();
+                let text = '';
+
+                if (ext === 'pdf') {
+                    text = await extractPdfText(att.data);
+                } else if (['xlsx', 'xls', 'xlsm', 'xlsb', 'ods', 'csv'].includes(ext)) {
+                    text = extractExcelText(att.data);
+                } else {
+                    continue; // skip images, Word docs, etc.
+                }
+
+                if (!text.trim()) continue;
+                foundDoc = true;
+
+                const fields = extractFields(text);
+                // Merge: first non-empty value wins for each field
+                for (const [k, v] of Object.entries(fields)) {
+                    if (!merged[k] && v) merged[k] = v;
+                }
+            }
+
+            if (!foundDoc) {
+                merged['Job Name'] = merged['Job Name'] || '[No PDF/Excel attachments found]';
+            }
+
+        } catch (e) {
+            merged['Job Name'] = `[Parse error: ${e.message}]`;
+        }
+
+        rows.push({ sourceFile: file.name, ...merged });
+    }
+
+    return rows;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build and download spreadsheet
+// ─────────────────────────────────────────────────────────────────────────────
+function downloadSpreadsheet(rows) {
+    const fixedFields  = Object.keys(FIELD_CONFIG);
+    const scopeFields  = SCOPE_CATEGORIES.map(s => s + ' %');
+    const headers      = ['Source File', ...fixedFields, ...scopeFields];
+
+    const aoa = [headers];
+    for (const row of rows) {
+        aoa.push(headers.map(h => {
+            if (h === 'Source File') return row.sourceFile;
+            return row[h] ?? '';
+        }));
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Column widths
+    ws['!cols'] = headers.map(h => {
+        if (h === 'Source File')  return { wch: 40 };
+        if (h === 'Address')      return { wch: 40 };
+        if (h === 'Job Name')     return { wch: 36 };
+        if (h === 'Contract $')   return { wch: 18 };
+        if (h.endsWith(' %'))     return { wch: 14 };
+        return { wch: 26 };
+    });
+
+    // Bold header row + light blue fill
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let c = range.s.c; c <= range.e.c; c++) {
+        const ref = XLSX.utils.encode_cell({ r: 0, c });
+        if (ws[ref]) {
+            ws[ref].s = {
+                font: { bold: true },
+                fill: { patternType: 'solid', fgColor: { rgb: 'D4E9FF' } },
+                alignment: { wrapText: true }
+            };
+        }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Projects');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `project_export_${dateStr}.xlsx`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtSize(bytes) {
+    if (bytes < 1024)        return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function escHtml(s) {
+    return String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showAlert(msg, type) {
+    alertArea.innerHTML = `<div class="alert alert-${type}">${escHtml(msg)}</div>`;
+}
+
+function clearAlert() { alertArea.innerHTML = ''; }
+</script>
+
+</body>
+</html>
