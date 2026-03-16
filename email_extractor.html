@@ -854,7 +854,22 @@ function extractFields(text) {
 
     // Scopes
     for (const scope of SCOPE_CATEGORIES) {
-        result[scope + ' %'] = findScopePercent(lines, scope);
+        const pct = findScopePercent(lines, scope);
+        result[scope + ' %'] = pct;
+        if (!pct) {
+            // Diagnostic: is the scope name present in any line at all?
+            const lsc = scope.toLowerCase();
+            const hit = lines.find(l => l.toLowerCase().includes(lsc));
+            if (hit) {
+                // Found in a line but regex didn't match — show the raw bytes around it
+                const idx = hit.toLowerCase().indexOf(lsc);
+                const around = hit.slice(Math.max(0, idx - 2), idx + scope.length + 20);
+                const codes = [...around].map(c => c.charCodeAt(0).toString(16).padStart(2,'0'));
+                console.log(`[ScopeMiss] "${scope}" found but no match. Chars: "${around}" codes: ${codes.join(' ')}`);
+            } else {
+                console.log(`[ScopeMiss] "${scope}" NOT in any of ${lines.length} lines`);
+            }
+        }
     }
 
     // ── PDF form-specific fallbacks ──────────────────────────────────────────
