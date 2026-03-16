@@ -771,7 +771,7 @@ function parseBoolean(rawValue, contextLine) {
     const ctx = (r + ' ' + (contextLine || '')).toLowerCase();
     if (/\byes\b|✓|☑|✔|checked|required|confirmed/.test(ctx)) return 'Yes';
     if (/\bno\b|\bnone\b|\bn\/a\b|\bnot required\b/.test(ctx)) return 'No';
-    return r || '?';
+    return ''; // can't determine; leave blank rather than returning arbitrary text
 }
 
 // Scope percentage: find scopeName immediately followed by a TAB then a numeric
