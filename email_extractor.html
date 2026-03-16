@@ -284,13 +284,14 @@ const FIELD_CONFIG = {
         type: 'text'
     },
     'GC Company': {
-        aliases: ['general contractor name', 'general contractor', 'prime contractor',
-                  'gc:', 'contractor:', 'client:', 'hiring party', 'upper tier'],
+        // Keep only the specific form label — "general contractor" alone is too
+        // generic and matches the CUSTOMER ROLE section header before the data row.
+        aliases: ['general contractor name', 'general contractor company',
+                  'prime contractor name'],
         type: 'text'
     },
     'Architect': {
-        aliases: ['architect name', 'architect:', 'architect of record',
-                  'design professional', 'project architect', 'a/e:'],
+        aliases: ['architect name', 'architect of record', 'project architect'],
         type: 'text'
     },
     'Contract $': {
@@ -321,15 +322,15 @@ const FIELD_CONFIG = {
         type: 'text'
     },
     'Start Date': {
+        // "start date" and "commencement date" are too generic for substring matching
         aliases: ['murray installation of work start date', 'installation of work start date',
-                  'work start date', 'start date', 'commencement date',
-                  'notice to proceed', 'ntp date', 'mobilization date'],
+                  'work start date', 'mobilization date', 'ntp date', 'notice to proceed'],
         type: 'date'
     },
     'End Date': {
-        aliases: ['murray completion date', 'completion date', 'end date',
-                  'substantial completion', 'final completion', 'project completion',
-                  'finish date'],
+        // "end date" is too generic; prefer the form-specific labels
+        aliases: ['murray completion date', 'completion date', 'substantial completion',
+                  'final completion', 'project completion', 'finish date'],
         type: 'date'
     },
     'Bonded': {
@@ -611,16 +612,25 @@ function toLines(text) {
     return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 }
 
-// Find all lines that contain any alias (case-insensitive); return indices
+// Find all lines that contain any alias; return indices sorted so lines where
+// an alias is an EXACT tab-separated token come before lines where the alias
+// is only a substring. This prevents "SHORT PROJECT NAME" from winning over
+// "PROJECT NAME", and "GENERAL CONTRACTOR" (customer-role header) from winning
+// over "GENERAL CONTRACTOR NAME" (the actual data field).
 function findAliasLines(lines, aliases) {
-    const hits = [];
+    const exact   = [];
+    const partial = [];
     for (let i = 0; i < lines.length; i++) {
-        const lower = lines[i].toLowerCase();
-        if (aliases.some(a => lower.includes(a.toLowerCase()))) {
-            hits.push(i);
+        const lower  = lines[i].toLowerCase();
+        const tokens = lower.split('\t').map(t => t.trim());
+        const hasExact = aliases.some(a => tokens.some(t => t === a.toLowerCase()));
+        if (hasExact) {
+            exact.push(i);
+        } else if (aliases.some(a => lower.includes(a.toLowerCase()))) {
+            partial.push(i);
         }
     }
-    return hits;
+    return [...exact, ...partial];
 }
 
 // Extract value for a field from the line where its alias was found.
@@ -768,6 +778,24 @@ function findScopePercent(lines, scopeName) {
     return '';
 }
 
+// Column headers / placeholder text that appear adjacent to blank value cells in
+// the JOB SETUP FORM — they must never be returned as field values.
+const FORM_NON_VALUES = new Set([
+    'contact name', 'lead estimator(s)', 'phone/cell', 'main office phone', 'email',
+    'if so, give amount', 'if yes, amount', 'if yes, goal or required', 'if yes % req',
+    'must total 100%', 'bid hrs (field only)', 'local union',
+    'superintendent 1', 'superintendent 2', 'superintendent 3',
+    'foreman 1', 'foreman 2', 'foreman 3',
+    'project executive', 'senior executive', 'project engineer',
+    'special sales tax program', 'part (b) to contract? if so, give amount',
+]);
+
+// Primary aliases (first alias of each field) — if a candidate value exactly
+// matches one of these it is itself a field label, not a real value.
+const ALL_PRIMARY_ALIASES = new Set(
+    Object.values(FIELD_CONFIG).map(c => c.aliases[0].toLowerCase())
+);
+
 // Main extraction: given full document text, return object with all field values
 function extractFields(text) {
     const lines  = toLines(text);
@@ -779,7 +807,10 @@ function extractFields(text) {
 
         for (const idx of hitIdxs) {
             const raw = valueFromLine(lines, idx, config.aliases);
+            // Skip blank, known column headers, and values that are themselves field labels
             if (!raw) continue;
+            if (FORM_NON_VALUES.has(raw.toLowerCase())) continue;
+            if (ALL_PRIMARY_ALIASES.has(raw.toLowerCase())) continue;
 
             if (config.type === 'currency') {
                 value = parseCurrency(raw);
