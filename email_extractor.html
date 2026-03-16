@@ -284,9 +284,11 @@ const FIELD_CONFIG = {
         type: 'text'
     },
     'GC Company': {
-        // Keep only the specific form label — "general contractor" alone is too
-        // generic and matches the CUSTOMER ROLE section header before the data row.
-        aliases: ['general contractor name', 'general contractor company',
+        // Keep only specific form labels. "general contractor" alone is too generic
+        // and matches the CUSTOMER ROLE section header before the data row.
+        // Excel uses "GC / CONSTRUCTION MANAGER NAME:" as the label.
+        aliases: ['general contractor name', 'gc / construction manager name',
+                  'gc/construction manager name', 'general contractor company',
                   'prime contractor name'],
         type: 'text'
     },
@@ -334,7 +336,8 @@ const FIELD_CONFIG = {
         type: 'date'
     },
     'Bonded': {
-        aliases: ['bond?', 'bonded', 'performance bond', 'payment bond',
+        // PDF uses "BOND?" with question mark; Excel uses "BOND" without
+        aliases: ['bond?', 'bond', 'bonded', 'performance bond', 'payment bond',
                   'bond required', 'surety bond'],
         type: 'boolean'
     },
@@ -707,8 +710,22 @@ function parseCurrency(text) {
 
 // Date: attempt to parse common formats; return MM/DD/YYYY or original string
 function parseDate(text) {
+    const raw = (text || '').trim();
+
+    // Excel serial date: a bare integer in the range 40000–99999 (≈ 2009–2173).
+    // Excel stores dates as days since Jan 0 1900, with a deliberate leap-year bug
+    // on serial 60 (it treats Feb 29 1900 as valid). Serials > 60 are offset by 2.
+    if (/^\d+$/.test(raw)) {
+        const serial = parseInt(raw, 10);
+        if (serial > 40000 && serial < 100000) {
+            const days = serial > 60 ? serial - 2 : serial - 1;
+            const d = new Date(Date.UTC(1900, 0, 1) + days * 86400000);
+            return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`;
+        }
+    }
+
     // Strip extra words, keep the date-like part
-    const cleaned = text.replace(/(?:start|end|date|from|to|by|on|:)/gi, '').trim();
+    const cleaned = raw.replace(/(?:start|end|date|from|to|by|on|:)/gi, '').trim();
 
     const formats = [
         // YYYY-MM-DD
@@ -765,14 +782,24 @@ function findScopePercent(lines, scopeName) {
 
             // Check next 1-2 tokens for a percentage value
             for (let j = i + 1; j < Math.min(i + 3, tokens.length); j++) {
-                const pct = tokens[j].match(/^(\d+\.?\d*)\s*%?$/);
-                if (pct) return pct[1] + '%';
+                const tok  = tokens[j];
+                const pct  = tok.match(/^(\d+\.?\d*)\s*(%)?$/);
+                if (!pct) continue;
+                const val    = parseFloat(pct[1]);
+                const hasPct = !!pct[2];
+                if (isNaN(val)) continue;
+                // Excel decimal fractions (0.45 → 45%); PDF already-% values pass through
+                if (!hasPct && val <= 1) return (val * 100).toFixed(2).replace(/\.00$/, '') + '%';
+                return val.toFixed(2).replace(/\.00$/, '') + '%';
             }
 
             // Fallback: scan rest of the line text for NN% pattern after the scope name
             const afterScope = line.slice(line.toLowerCase().indexOf(lowerScope) + scopeName.length);
             const inline = afterScope.match(/(\d+\.?\d*)\s*%/);
-            if (inline) return inline[1] + '%';
+            if (inline) {
+                const val = parseFloat(inline[1]);
+                if (!isNaN(val)) return val.toFixed(2).replace(/\.00$/, '') + '%';
+            }
         }
     }
     return '';
@@ -788,6 +815,10 @@ const FORM_NON_VALUES = new Set([
     'foreman 1', 'foreman 2', 'foreman 3',
     'project executive', 'senior executive', 'project engineer',
     'special sales tax program', 'part (b) to contract? if so, give amount',
+    // Field labels that appear as adjacent tokens when a value cell is blank
+    'retention', "ld's", 'construction type', 'hourly rates submitted',
+    'hourly rates approved', 'co markup %', 'bond', 'main office phone:',
+    'this function is for admin use only',
 ]);
 
 // Primary aliases (first alias of each field) — if a candidate value exactly
@@ -835,7 +866,69 @@ function extractFields(text) {
         result[scope + ' %'] = findScopePercent(lines, scope);
     }
 
+    // ── PDF form-specific fallbacks ──────────────────────────────────────────
+    // In the PDF, some labels are in a different Y-bucket from their values
+    // (small label text at top of cell vs large value text in center).
+    // When primary alias extraction returns nothing, these targeted fallbacks
+    // retrieve the value from its known positional location.
+
+    // Fallback: Job Name — in the PDF the full project name is token[2] on the
+    // MC JOB NUMBER line (label | job# | project name | BASE CONTRACT AMOUNT | amount)
+    if (!result['Job Name']) {
+        for (const idx of findAliasLines(lines, ['mc job number'])) {
+            const toks = lines[idx].split('\t').map(t => t.trim()).filter(Boolean);
+            for (let off = 2; off < Math.min(toks.length, 6); off++) {
+                const c = toks[off];
+                if (c && !FORM_NON_VALUES.has(c.toLowerCase()) &&
+                         !ALL_PRIMARY_ALIASES.has(c.toLowerCase())) {
+                    result['Job Name'] = c.slice(0, 200);
+                    break;
+                }
+            }
+            if (result['Job Name']) break;
+        }
+    }
+
+    // Fallback: Short Project Name — in the PDF the "SHORT PROJECT NAME" label
+    // is split across two Y-buckets. "SHORT" ends up on the same line as the
+    // short project name value; "PROJECT NAME" ends up on the line below.
+    if (!result['Short Project Name']) {
+        for (let i = 0; i < lines.length; i++) {
+            const toks = lines[i].split('\t').map(t => t.trim()).filter(Boolean);
+            if (toks[0] === 'SHORT' && toks.length >= 2) {
+                const c = toks[1];
+                if (c && !FORM_NON_VALUES.has(c.toLowerCase()) &&
+                         !ALL_PRIMARY_ALIASES.has(c.toLowerCase())) {
+                    result['Short Project Name'] = c.slice(0, 200);
+                }
+                break;
+            }
+        }
+    }
+
+    // Fallback: Address — in the PDF the street address appears at a higher Y
+    // (larger font, center of cell) than the "PROJECT ADDRESS" label (small font,
+    // bottom of cell), so it is sorted BEFORE the label in the output. Look for a
+    // standalone street address on the 1–3 lines preceding the label line.
+    if (!result['Address']) {
+        for (const idx of findAliasLines(lines, ['project address', 'job address'])) {
+            for (let j = idx - 1; j >= Math.max(0, idx - 3); j--) {
+                const toks = lines[j].split('\t').map(t => t.trim()).filter(Boolean);
+                if (toks.length === 1 && looksLikeAddress(toks[0])) {
+                    result['Address'] = toks[0];
+                    break;
+                }
+            }
+            if (result['Address']) break;
+        }
+    }
+
     return result;
+}
+
+// A heuristic for a US street address: starts with digits and contains ", ST 12345"
+function looksLikeAddress(text) {
+    return /^\d/.test(text) && /,\s*[A-Z]{2}\s+\d{5}/.test(text);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
