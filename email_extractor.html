@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Attachment Extractor</title>
+
+    <!-- SheetJS: reads .xlsx/.xls attachments and writes the output spreadsheet -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- PDF.js: extracts text from PDF attachments -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #1c1e21;
+        }
+
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            color: #65676b;
+            margin-bottom: 22px;
+            font-size: 15px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.13);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        /* ── Instructions banner ── */
+        .instructions {
+            background: #fff8e5;
+            border: 1px solid #f0b429;
+            border-radius: 8px;
+            padding: 14px 18px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .instructions strong { display: block; margin-bottom: 4px; font-size: 15px; }
+        .instructions ol { padding-left: 20px; }
+
+        /* ── Drop zone ── */
+        #dropZone {
+            border: 2px dashed #1877f2;
+            border-radius: 12px;
+            padding: 52px 24px;
+            text-align: center;
+            background: #f0f7ff;
+            cursor: pointer;
+            transition: background 0.18s, border-color 0.18s;
+            user-select: none;
+        }
+        #dropZone.drag-over {
+            background: #d4e9ff;
+            border-color: #0a5dc2;
+        }
+        .drop-icon   { font-size: 48px; margin-bottom: 12px; }
+        .drop-title  { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+        .drop-sub    { color: #65676b; font-size: 14px; margin-bottom: 18px; }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-block;
+            padding: 10px 22px;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: background 0.18s, opacity 0.18s;
+            line-height: 1.4;
+        }
+        .btn-primary           { background: #1877f2; color: #fff; }
+        .btn-primary:hover:not(:disabled) { background: #166fe5; }
+        .btn-primary:disabled  { opacity: 0.45; cursor: not-allowed; }
+        .btn-secondary         { background: #e4e6e9; color: #1c1e21; }
+        .btn-secondary:hover   { background: #d8dadf; }
+        .btn-browse            { cursor: pointer; }
+
+        /* ── File list ── */
+        #fileList { margin-top: 16px; }
+        .file-pill {
+            display: flex;
+            align-items: center;
+            background: #f0f2f5;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            gap: 8px;
+        }
+        .file-pill-name {
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .file-pill-size  { color: #65676b; font-size: 13px; white-space: nowrap; }
+        .file-pill-remove {
+            color: #e41e3f;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+            padding: 0 2px;
+            flex-shrink: 0;
+        }
+        .file-pill-remove:hover { color: #b0001b; }
+
+        /* ── Action bar ── */
+        #actionBar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+        #fileCount { flex: 1; color: #65676b; font-size: 14px; min-width: 120px; }
+
+        /* ── Progress ── */
+        #progressArea { text-align: center; padding: 28px 0 8px; }
+        .spinner {
+            width: 34px; height: 34px;
+            border: 3px solid #e4e6e9;
+            border-top-color: #1877f2;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+            margin: 0 auto 14px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #progressMsg { color: #65676b; font-size: 14px; }
+
+        /* ── Alerts ── */
+        .alert {
+            padding: 12px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-top: 16px;
+        }
+        .alert-error   { background: #fff0f0; border: 1px solid #e41e3f; color: #b0001b; }
+        .alert-success { background: #f0fff4; border: 1px solid #28a745; color: #155724; }
+
+        /* ── Footer note ── */
+        .privacy-note {
+            text-align: center;
+            font-size: 12px;
+            color: #8a8d91;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Email Attachment Extractor</h1>
+    <p class="subtitle">Drop Outlook <strong>.msg</strong> emails below. PDF and Excel attachments are extracted automatically into a single downloadable spreadsheet.</p>
+
+    <div class="instructions">
+        <strong>How to use:</strong>
+        <ol>
+            <li>Drag and drop your <strong>.msg</strong> files onto the zone below (or click <em>Browse files</em>)</li>
+            <li>Click <strong>Process &amp; Download</strong></li>
+            <li>A <strong>.xlsx</strong> file downloads — one row per email — with attachment text included</li>
+        </ol>
+    </div>
+
+    <div class="card">
+        <div id="dropZone">
+            <div class="drop-icon">📧</div>
+            <div class="drop-title">Drag &amp; drop .msg files here</div>
+            <div class="drop-sub">PDF and Excel attachments are extracted &bull; Runs entirely in your browser</div>
+            <label class="btn btn-secondary btn-browse">
+                Browse files
+                <input type="file" id="fileInput" accept=".msg" multiple style="display:none">
+            </label>
+        </div>
+
+        <div id="fileList"></div>
+
+        <div id="actionBar" style="display:none">
+            <span id="fileCount"></span>
+            <button id="processBtn" class="btn btn-primary">Process &amp; Download</button>
+            <button id="clearBtn"   class="btn btn-secondary">Clear</button>
+        </div>
+
+        <div id="progressArea" style="display:none">
+            <div class="spinner"></div>
+            <div id="progressMsg">Processing…</div>
+        </div>
+
+        <div id="alertArea"></div>
+    </div>
+
+    <p class="privacy-note">🔒 All processing happens locally in your browser. No data is uploaded anywhere.</p>
+</div>
+
+<script type="module">
+// ─────────────────────────────────────────────────────────────────────────────
+// Import: @kenjiuno/msgreader — parses Outlook .msg (OLE/MAPI binary format)
+// ─────────────────────────────────────────────────────────────────────────────
+import MsgReader from 'https://esm.sh/@kenjiuno/msgreader';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF.js worker (loaded from cdnjs as a global, configured here)
+// ─────────────────────────────────────────────────────────────────────────────
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// State & DOM refs
+// ─────────────────────────────────────────────────────────────────────────────
+let selectedFiles = [];
+
+const dropZone     = document.getElementById('dropZone');
+const fileInput    = document.getElementById('fileInput');
+const fileList     = document.getElementById('fileList');
+const actionBar    = document.getElementById('actionBar');
+const fileCount    = document.getElementById('fileCount');
+const processBtn   = document.getElementById('processBtn');
+const clearBtn     = document.getElementById('clearBtn');
+const progressArea = document.getElementById('progressArea');
+const progressMsg  = document.getElementById('progressMsg');
+const alertArea    = document.getElementById('alertArea');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Drag & drop + file input wiring
+// ─────────────────────────────────────────────────────────────────────────────
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragenter', e => e.preventDefault());
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+});
+dropZone.addEventListener('click', e => {
+    // Only open file picker when clicking the zone itself (not a child button/label)
+    if (e.target === dropZone || e.target.classList.contains('drop-icon') ||
+        e.target.classList.contains('drop-title') || e.target.classList.contains('drop-sub')) {
+        fileInput.click();
+    }
+});
+fileInput.addEventListener('change', () => {
+    addFiles([...fileInput.files]);
+    fileInput.value = '';
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// File management
+// ─────────────────────────────────────────────────────────────────────────────
+function addFiles(files) {
+    const msgFiles = files.filter(f => f.name.toLowerCase().endsWith('.msg'));
+    const skipped  = files.length - msgFiles.length;
+    let added = 0;
+
+    for (const f of msgFiles) {
+        if (!selectedFiles.find(s => s.name === f.name && s.size === f.size)) {
+            selectedFiles.push(f);
+            added++;
+        }
+    }
+
+    renderFileList();
+
+    if (skipped > 0) {
+        showAlert(`${skipped} file(s) ignored — only .msg files are supported.`, 'error');
+    } else if (added > 0) {
+        clearAlert();
+    }
+}
+
+function removeFile(index) {
+    selectedFiles.splice(index, 1);
+    renderFileList();
+    clearAlert();
+}
+
+function renderFileList() {
+    fileList.innerHTML = '';
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+        const f = selectedFiles[i];
+        const pill = document.createElement('div');
+        pill.className = 'file-pill';
+        pill.innerHTML = `
+            <span class="file-pill-name" title="${escHtml(f.name)}">${escHtml(f.name)}</span>
+            <span class="file-pill-size">${fmtSize(f.size)}</span>
+            <span class="file-pill-remove" data-idx="${i}" title="Remove">×</span>
+        `;
+        fileList.appendChild(pill);
+    }
+
+    fileList.querySelectorAll('.file-pill-remove').forEach(el => {
+        el.addEventListener('click', () => removeFile(parseInt(el.dataset.idx)));
+    });
+
+    const hasFiles = selectedFiles.length > 0;
+    actionBar.style.display = hasFiles ? 'flex' : 'none';
+    fileCount.textContent   = `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''} queued`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Process & download
+// ─────────────────────────────────────────────────────────────────────────────
+processBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return;
+
+    setProcessing(true);
+    clearAlert();
+
+    try {
+        const { rows, maxAttachments } = await processAllFiles(selectedFiles);
+        downloadSpreadsheet(rows, maxAttachments);
+        showAlert(`✓ Done! ${rows.length} email(s) exported to spreadsheet.`, 'success');
+    } catch (err) {
+        showAlert(`Error: ${err.message}`, 'error');
+        console.error(err);
+    } finally {
+        setProcessing(false);
+    }
+});
+
+clearBtn.addEventListener('click', () => {
+    selectedFiles = [];
+    renderFileList();
+    clearAlert();
+});
+
+function setProcessing(on) {
+    progressArea.style.display    = on ? 'block' : 'none';
+    actionBar.style.display       = on ? 'none' : (selectedFiles.length > 0 ? 'flex' : 'none');
+    dropZone.style.pointerEvents  = on ? 'none' : '';
+    dropZone.style.opacity        = on ? '0.5' : '';
+}
+
+function updateProgress(msg) {
+    progressMsg.textContent = msg;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Parse one .msg file
+// ─────────────────────────────────────────────────────────────────────────────
+function parseMsgFile(arrayBuffer) {
+    const reader = new MsgReader(arrayBuffer);
+    const msg    = reader.getFileData();
+
+    // Build "From" string
+    const from = msg.senderName
+        ? `${msg.senderName} <${msg.senderEmail ?? ''}>`
+        : (msg.senderEmail ?? '');
+
+    // Format a recipient list
+    const fmtRecips = list =>
+        (list ?? [])
+            .map(r => r.name ? `${r.name} <${r.email ?? ''}>` : (r.email ?? r.name ?? ''))
+            .filter(Boolean)
+            .join('; ');
+
+    const recipients = msg.recipients ?? [];
+    const toList     = recipients.filter(r => (r.recipType ?? '').toLowerCase() === 'to');
+    const ccList     = recipients.filter(r => (r.recipType ?? '').toLowerCase() === 'cc');
+    // If no typed recipients, fall back to all recipients for 'To'
+    const toFinal    = toList.length > 0 ? fmtRecips(toList) : fmtRecips(recipients);
+
+    // Date — try common msgreader timestamp fields
+    let date = '';
+    const rawDate = msg.messageDeliveryTime ?? msg.clientSubmitTime ?? msg.creationTime;
+    if (rawDate) {
+        try { date = new Date(rawDate).toLocaleString(); } catch (_) { date = String(rawDate); }
+    }
+
+    // Attachments — read binary content via getAttachment()
+    const attachments = (msg.attachments ?? []).map((att, i) => {
+        try {
+            const result = reader.getAttachment(att);
+            return {
+                name: result.fileName ?? att.fileName ?? `attachment_${i + 1}`,
+                data: result.content  // Uint8Array
+            };
+        } catch (_) {
+            return { name: att.fileName ?? `attachment_${i + 1}`, data: null };
+        }
+    });
+
+    return {
+        from,
+        to:      toFinal,
+        cc:      fmtRecips(ccList),
+        subject: msg.subject ?? '',
+        date,
+        body:    (msg.body ?? '').trim(),
+        attachments
+    };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF text extraction (via PDF.js global)
+// ─────────────────────────────────────────────────────────────────────────────
+async function extractPdfText(uint8) {
+    if (typeof pdfjsLib === 'undefined') return '[PDF.js library not loaded — check internet connection]';
+    try {
+        const pdf = await pdfjsLib.getDocument({ data: uint8 }).promise;
+        const parts = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+            const page    = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            parts.push(content.items.map(item => item.str).join(' '));
+        }
+        return parts.join('\n').trim();
+    } catch (e) {
+        return `[Could not extract PDF text: ${e.message}]`;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Excel data extraction (via SheetJS global)
+// ─────────────────────────────────────────────────────────────────────────────
+function extractExcelText(uint8) {
+    if (typeof XLSX === 'undefined') return '[SheetJS library not loaded — check internet connection]';
+    try {
+        const wb = XLSX.read(uint8, { type: 'array' });
+        const parts = [];
+        for (const sheetName of wb.SheetNames) {
+            parts.push(`=== Sheet: ${sheetName} ===`);
+            const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
+            for (const row of rows) {
+                const cells = row.map(c => String(c ?? '')).filter(c => c.trim() !== '');
+                if (cells.length) parts.push(cells.join('\t'));
+            }
+        }
+        return parts.join('\n').trim();
+    } catch (e) {
+        return `[Could not read Excel file: ${e.message}]`;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Process all queued files
+// ─────────────────────────────────────────────────────────────────────────────
+async function processAllFiles(files) {
+    const rows = [];
+    let maxAttachments = 0;
+
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        updateProgress(`Processing ${i + 1} of ${files.length}: ${file.name}`);
+
+        try {
+            const buf = await file.arrayBuffer();
+            const msg = parseMsgFile(buf);
+
+            const attResults = [];
+            for (const att of msg.attachments) {
+                if (!att.data) {
+                    attResults.push({ name: att.name, content: '[Could not read attachment data]' });
+                    continue;
+                }
+
+                const ext = att.name.split('.').pop().toLowerCase();
+                let content = '';
+
+                if (ext === 'pdf') {
+                    content = await extractPdfText(att.data);
+                } else if (['xlsx', 'xls', 'xlsm', 'xlsb', 'ods', 'csv'].includes(ext)) {
+                    content = extractExcelText(att.data);
+                }
+                // Other attachment types (images, Word docs, etc.): name recorded, content left blank
+
+                attResults.push({ name: att.name, content });
+            }
+
+            maxAttachments = Math.max(maxAttachments, attResults.length);
+
+            rows.push({
+                from:        msg.from,
+                to:          msg.to,
+                cc:          msg.cc,
+                subject:     msg.subject,
+                date:        msg.date,
+                body:        msg.body,
+                attachments: attResults
+            });
+
+        } catch (e) {
+            // Don't abort entire batch on one bad file; record error in the row
+            rows.push({
+                from: '', to: '', cc: '', subject: file.name,
+                date: '', body: `[Parse error: ${e.message}]`,
+                attachments: []
+            });
+        }
+    }
+
+    return { rows, maxAttachments };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build and download output spreadsheet
+// ─────────────────────────────────────────────────────────────────────────────
+function downloadSpreadsheet(rows, maxAttachments) {
+    // Header row
+    const headers = ['From', 'To', 'CC', 'Subject', 'Date', 'Body'];
+    for (let i = 1; i <= maxAttachments; i++) {
+        headers.push(`Attachment ${i} Name`, `Attachment ${i} Content`);
+    }
+
+    // Data rows
+    const aoa = [headers];
+    for (const row of rows) {
+        const cells = [row.from, row.to, row.cc, row.subject, row.date, row.body];
+        for (let i = 0; i < maxAttachments; i++) {
+            cells.push(
+                row.attachments[i]?.name    ?? '',
+                row.attachments[i]?.content ?? ''
+            );
+        }
+        aoa.push(cells);
+    }
+
+    // Build worksheet
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Column widths
+    ws['!cols'] = headers.map((_, i) => {
+        if (i === 5 || (i >= 7 && i % 2 === 1)) return { wch: 60 }; // Body + content columns
+        return { wch: 32 };
+    });
+
+    // Freeze header row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Emails');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `email_export_${dateStr}.xlsx`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtSize(bytes) {
+    if (bytes < 1024)        return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function showAlert(msg, type) {
+    alertArea.innerHTML = `<div class="alert alert-${type}">${escHtml(msg)}</div>`;
+}
+
+function clearAlert() {
+    alertArea.innerHTML = '';
+}
+</script>
+
+</body>
+</html>
