@@ -658,8 +658,11 @@ function valueFromLine(lines, idx, aliases) {
     }
 
     // Pass 2: substring match (alias appears inside a longer token)
+    // Skip if the label token is a known multi-word header (e.g. "GC PAYMENT BOND IN HAND"
+    // contains 'bond' but is not the Bond field label).
     for (let t = 0; t < tokens.length - 1; t++) {
         if (aliases.some(a => tokens[t].toLowerCase().includes(a.toLowerCase()))) {
+            if (FORM_NON_VALUES.has(tokens[t].toLowerCase())) continue;
             return tokens[t + 1];
         }
     }
