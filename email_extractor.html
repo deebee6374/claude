@@ -623,37 +623,56 @@ function findAliasLines(lines, aliases) {
     return hits;
 }
 
-// Returns true if a string looks like a field label (all-caps, short, no digits)
-function isLikelyLabel(text) {
-    return /^[A-Z][A-Z\s\/\(\)#?&']+$/.test(text) && text.length < 50;
-}
-
 // Extract value for a field from the line where its alias was found.
-// Primary strategy: split by tab, find the alias token, return the NEXT token.
-// This correctly handles table/grid PDFs where label and value sit in adjacent cells.
-// Fallback: look at the next 1-2 lines for a value.
+// Uses a 5-pass strategy — returns the IMMEDIATE next token after the matched alias.
+// No label-detection heuristics: values in this form ARE all-caps (NO, YES, LUMP SUM…)
+// and must never be skipped.
 function valueFromLine(lines, idx, aliases) {
     const line   = lines[idx];
     const tokens = line.split('\t').map(t => t.trim()).filter(Boolean);
 
-    // Strategy 1: find which token matches the alias, return the next token
+    // Pass 1: exact single-token match → immediate next token
     for (let t = 0; t < tokens.length - 1; t++) {
-        const tok = tokens[t].toLowerCase();
-        if (aliases.some(a => tok === a.toLowerCase() || tok.includes(a.toLowerCase()))) {
-            // Skip tokens that are themselves labels; keep scanning right
-            for (let v = t + 1; v < tokens.length; v++) {
-                const candidate = tokens[v];
-                if (candidate && !isLikelyLabel(candidate)) return candidate;
-                if (candidate && isLikelyLabel(candidate)) break; // hit next label, stop
+        if (aliases.some(a => tokens[t].toLowerCase() === a.toLowerCase())) {
+            return tokens[t + 1];
+        }
+    }
+
+    // Pass 2: substring match (alias appears inside a longer token)
+    for (let t = 0; t < tokens.length - 1; t++) {
+        if (aliases.some(a => tokens[t].toLowerCase().includes(a.toLowerCase()))) {
+            return tokens[t + 1];
+        }
+    }
+
+    // Pass 3: alias split across multiple adjacent tokens
+    // e.g. PDF emits "MC JOB" and "NUMBER" as separate items → tokens ["MC JOB","NUMBER","26009"]
+    for (let t = 0; t < tokens.length; t++) {
+        for (let span = 2; span <= 4 && t + span <= tokens.length - 1; span++) {
+            const combined = tokens.slice(t, t + span).join(' ').toLowerCase();
+            if (aliases.some(a => combined === a.toLowerCase())) {
+                return tokens[t + span];
             }
         }
     }
 
-    // Strategy 2: single-token line (the alias IS the whole line) → value on next line
+    // Pass 4: alias appears as substring anywhere in the full line text
+    for (const alias of aliases) {
+        const lPos = line.toLowerCase().indexOf(alias.toLowerCase());
+        if (lPos === -1) continue;
+        const afterAlias = line.slice(lPos + alias.length);
+        const tIdx = afterAlias.indexOf('\t');
+        if (tIdx !== -1) {
+            const val = afterAlias.slice(tIdx + 1).split('\t')[0].trim();
+            if (val) return val;
+        }
+    }
+
+    // Pass 5: alias is the only token on the line → value is on the next line
     if (tokens.length <= 1) {
-        for (let j = idx + 1; j < Math.min(idx + 3, lines.length); j++) {
-            const nextTokens = lines[j].split('\t').map(t => t.trim()).filter(Boolean);
-            if (nextTokens.length && !isLikelyLabel(nextTokens[0])) return nextTokens[0];
+        for (let j = idx + 1; j < Math.min(idx + 2, lines.length); j++) {
+            const first = lines[j].split('\t')[0]?.trim();
+            if (first) return first;
         }
     }
 
@@ -709,13 +728,17 @@ function parseDate(text) {
     return /\d/.test(cleaned) && cleaned.length < 30 ? cleaned : '';
 }
 
-// Boolean: look for yes/no/checked/required signals near the alias line
-function parseBoolean(line, nextLine) {
-    const both = (line + ' ' + (nextLine || '')).toLowerCase();
-    if (/\byes\b|✓|☑|checked|required|✔|confirmed|true|\bx\b/.test(both)) return 'Yes';
-    if (/\bno\b|\bnone\b|\bn\/a\b|\bnot required\b|\bfalse\b|unchecked/.test(both)) return 'No';
-    // Presence of the keyword itself often implies "Yes" in construction docs
-    return '?';
+// Boolean: check the extracted raw value directly first, then fall back to context scan.
+// rawValue is the token immediately after the label (e.g. "NO", "YES").
+// contextLine is the full reconstructed tab-line for broader pattern matching.
+function parseBoolean(rawValue, contextLine) {
+    const r = (rawValue || '').trim();
+    if (/^yes$/i.test(r)) return 'Yes';
+    if (/^no$/i.test(r))  return 'No';
+    const ctx = (r + ' ' + (contextLine || '')).toLowerCase();
+    if (/\byes\b|✓|☑|✔|checked|required|confirmed/.test(ctx)) return 'Yes';
+    if (/\bno\b|\bnone\b|\bn\/a\b|\bnot required\b/.test(ctx)) return 'No';
+    return r || '?';
 }
 
 // Scope percentage: find scope name token, return the next token if it's a percent,
@@ -765,8 +788,7 @@ function extractFields(text) {
             } else if (config.type === 'date') {
                 value = parseDate(raw);
             } else if (config.type === 'boolean') {
-                const nextLine = lines[idx + 1] ?? '';
-                value = parseBoolean(lines[idx], nextLine);
+                value = parseBoolean(raw, lines[idx]);
             } else {
                 value = raw.length <= 200 ? raw : raw.slice(0, 200);
             }
@@ -819,6 +841,9 @@ async function processAllFiles(files) {
                 }
 
                 if (!text.trim()) continue;
+                // Debug: open browser DevTools (F12 → Console) to inspect raw extracted lines
+                console.log(`[Extractor] "${att.name}" — first 40 lines:\n` +
+                    text.split('\n').slice(0, 40).join('\n'));
                 foundDoc = true;
 
                 const fields = extractFields(text);
