@@ -768,39 +768,28 @@ function parseBoolean(rawValue, contextLine) {
     return r || '?';
 }
 
-// Scope percentage: find scope name token, return the next token if it's a percent,
-// or scan the same line for a percentage pattern near the scope name.
+// Scope percentage: find scopeName immediately followed by a TAB then a numeric
+// value in the same line.  Handles PDF format (0.00%) and Excel decimal fractions
+// (0.45 → 45%).
 function findScopePercent(lines, scopeName) {
-    const lowerScope = scopeName.toLowerCase();
+    // Escape any regex-special characters in the scope name (e.g. the '/' in
+    // 'HIGH PURITY/PROCESS') so they are matched literally.
+    const escaped = scopeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Pattern: scope name + TAB + numeric value (with optional %)
+    const re = new RegExp(escaped + '\t([\\d.]+%?)', 'i');
     for (const line of lines) {
-        const lowerLine = line.toLowerCase();
-        if (!lowerLine.includes(lowerScope)) continue;
-
-        const tokens = line.split('\t').map(t => t.trim());
-        for (let i = 0; i < tokens.length; i++) {
-            if (!tokens[i].toLowerCase().includes(lowerScope)) continue;
-
-            // Check next 1-2 tokens for a percentage value
-            for (let j = i + 1; j < Math.min(i + 3, tokens.length); j++) {
-                const tok  = tokens[j];
-                const pct  = tok.match(/^(\d+\.?\d*)\s*(%)?$/);
-                if (!pct) continue;
-                const val    = parseFloat(pct[1]);
-                const hasPct = !!pct[2];
-                if (isNaN(val)) continue;
-                // Excel decimal fractions (0.45 → 45%); PDF already-% values pass through
-                if (!hasPct && val <= 1) return (val * 100).toFixed(2).replace(/\.00$/, '') + '%';
-                return val.toFixed(2).replace(/\.00$/, '') + '%';
-            }
-
-            // Fallback: scan rest of the line text for NN% pattern after the scope name
-            const afterScope = line.slice(line.toLowerCase().indexOf(lowerScope) + scopeName.length);
-            const inline = afterScope.match(/(\d+\.?\d*)\s*%/);
-            if (inline) {
-                const val = parseFloat(inline[1]);
-                if (!isNaN(val)) return val.toFixed(2).replace(/\.00$/, '') + '%';
-            }
+        const m = line.match(re);
+        if (!m) continue;
+        const tok = m[1];
+        const val = parseFloat(tok);
+        if (isNaN(val)) continue;
+        if (tok.endsWith('%')) {
+            // Already a percentage string (e.g. "0.00%" from PDF)
+            return val.toFixed(2).replace(/\.00$/, '') + '%';
         }
+        // Decimal fraction from Excel (0.45 → 45%) or integer percentage (45)
+        const pct = val <= 1 ? val * 100 : val;
+        return pct.toFixed(2).replace(/\.00$/, '') + '%';
     }
     return '';
 }
