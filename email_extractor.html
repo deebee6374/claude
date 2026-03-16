@@ -252,63 +252,94 @@ if (typeof pdfjsLib !== 'undefined') {
 // ─────────────────────────────────────────────────────────────────────────────
 const FIELD_CONFIG = {
     'Job Number': {
-        aliases: ['job #', 'job no', 'job number', 'job no.', 'project #', 'project no',
-                  'project no.', 'project number', 'contract no', 'contract no.', 'contract #',
-                  'work order', 'work order #', 'po #', 'po number', 'bid #', 'bid no'],
+        aliases: ['mc job number', 'job number', 'job #', 'job no', 'job no.',
+                  'project #', 'project no', 'project no.', 'project number',
+                  'contract no', 'contract no.', 'contract #', 'work order #', 'po #'],
         type: 'text'
     },
     'Job Name': {
         aliases: ['project name', 'job name', 'project title', 'job title',
-                  'description of work', 'scope of work', 'project description',
-                  'job description', 'work description'],
+                  'description of work', 'project description'],
+        type: 'text'
+    },
+    'Short Project Name': {
+        aliases: ['short project name', 'short name'],
         type: 'text'
     },
     'Address': {
-        aliases: ['project address', 'job address', 'site address', 'project location',
-                  'job location', 'job site', 'site location', 'location:', 'address:',
-                  'property address', 'building address'],
+        aliases: ['project address', 'job address', 'site address', 'property address',
+                  'project location', 'job site'],
+        type: 'text'
+    },
+    'Job Type': {
+        aliases: ['job type', 'project type', 'work type'],
+        type: 'text'
+    },
+    'Project Manager': {
+        aliases: ['project manager', 'pm:', 'project mgr'],
+        type: 'text'
+    },
+    'Branch': {
+        aliases: ['branch'],
         type: 'text'
     },
     'GC Company': {
-        aliases: ['general contractor', 'gc:', 'prime contractor', 'prime:', 'owner:',
-                  'client:', 'client name', 'owner name', 'contractor:', 'hiring party',
-                  'upper tier', 'upper-tier contractor'],
+        aliases: ['general contractor name', 'general contractor', 'prime contractor',
+                  'gc:', 'contractor:', 'client:', 'hiring party', 'upper tier'],
         type: 'text'
     },
     'Architect': {
-        aliases: ['architect:', 'architect of record', 'designer:', 'engineer of record',
-                  'a/e:', 'design professional', 'project architect', 'engineer:',
-                  'structural engineer', 'architect/engineer'],
+        aliases: ['architect name', 'architect:', 'architect of record',
+                  'design professional', 'project architect', 'a/e:'],
         type: 'text'
     },
     'Contract $': {
-        aliases: ['contract amount', 'contract sum', 'contract value', 'contract price',
-                  'subcontract amount', 'subcontract sum', 'subcontract value',
-                  'subcontract price', 'award amount', 'bid amount', 'total contract',
-                  'lump sum', 'contract total', 'total amount', 'total price',
-                  'base contract', 'original contract'],
+        aliases: ['base contract amount', 'contract amount', 'contract sum',
+                  'contract value', 'subcontract amount', 'subcontract sum',
+                  'award amount', 'bid amount', 'total contract', 'lump sum'],
         type: 'currency'
     },
+    'Part B Contract': {
+        aliases: ['part (b) to contract', 'part b to contract', 'part b contract',
+                  'part (b)', 'part b'],
+        type: 'currency'
+    },
+    'Contract Type': {
+        aliases: ['contract type'],
+        type: 'text'
+    },
+    'Construction Type': {
+        aliases: ['construction type'],
+        type: 'text'
+    },
+    'Property Owner': {
+        aliases: ['property owner'],
+        type: 'text'
+    },
+    'Project Owner': {
+        aliases: ['project owner'],
+        type: 'text'
+    },
     'Start Date': {
-        aliases: ['start date', 'commencement date', 'notice to proceed', 'ntp date',
-                  'ntp:', 'mobilization date', 'work start', 'project start',
-                  'construction start', 'start of work', 'begin date'],
+        aliases: ['murray installation of work start date', 'installation of work start date',
+                  'work start date', 'start date', 'commencement date',
+                  'notice to proceed', 'ntp date', 'mobilization date'],
         type: 'date'
     },
     'End Date': {
-        aliases: ['end date', 'completion date', 'substantial completion',
-                  'final completion', 'project completion', 'project end', 'finish date',
-                  'completion deadline', 'contract completion', 'work completion'],
+        aliases: ['murray completion date', 'completion date', 'end date',
+                  'substantial completion', 'final completion', 'project completion',
+                  'finish date'],
         type: 'date'
     },
     'Bonded': {
-        aliases: ['bonded', 'performance bond', 'payment bond', 'bond required',
-                  'bond:', 'surety bond', 'bonding required'],
+        aliases: ['bond?', 'bonded', 'performance bond', 'payment bond',
+                  'bond required', 'surety bond'],
         type: 'boolean'
     },
     'NDA': {
-        aliases: ['nda', 'non-disclosure', 'non disclosure', 'confidentiality agreement',
-                  'confidential agreement', 'nda required', 'confidentiality:'],
+        aliases: ['nda?', 'nda', 'non-disclosure', 'non disclosure',
+                  'confidentiality agreement', 'nda required'],
         type: 'boolean'
     },
 };
@@ -318,8 +349,8 @@ const FIELD_CONFIG = {
 // ─────────────────────────────────────────────────────────────────────────────
 const SCOPE_STORAGE_KEY = 'extractor_scopes_v1';
 const DEFAULT_SCOPES = [
-    'Concrete', 'Masonry', 'Steel', 'Carpentry', 'Roofing',
-    'Plumbing', 'HVAC', 'Electrical', 'Finishes', 'Site Work'
+    'HIGH PURITY/PROCESS', 'HVAC SHEET METAL', 'HVAC PIPING',
+    'PLUMBING', 'INDUSTRIAL', 'CIVIL'
 ];
 
 function loadScopes() {
@@ -514,19 +545,41 @@ function parseMsgAttachments(arrayBuffer) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PDF text extraction
+// PDF text extraction — reconstructs table rows using Y-coordinate grouping.
+// Items at the same Y position are on the same visual row; they are sorted
+// left-to-right by X and joined with tabs. Different rows become separate lines.
+// This preserves label→value adjacency that would otherwise be destroyed by
+// a simple join(' ').
 // ─────────────────────────────────────────────────────────────────────────────
 async function extractPdfText(uint8) {
     if (typeof pdfjsLib === 'undefined') return '';
     try {
-        const pdf = await pdfjsLib.getDocument({ data: uint8 }).promise;
-        const pages = [];
+        const pdf      = await pdfjsLib.getDocument({ data: uint8 }).promise;
+        const allLines = [];
+
         for (let p = 1; p <= pdf.numPages; p++) {
             const page    = await pdf.getPage(p);
             const content = await page.getTextContent();
-            pages.push(content.items.map(i => i.str).join(' '));
+
+            // Group text items by Y coordinate (round to 4-unit buckets to
+            // absorb minor baseline differences within the same visual row)
+            const byY = new Map();
+            for (const item of content.items) {
+                if (!item.str.trim()) continue;
+                const y = Math.round(item.transform[5] / 4) * 4;
+                if (!byY.has(y)) byY.set(y, []);
+                byY.get(y).push({ x: item.transform[4], str: item.str.trim() });
+            }
+
+            // Sort rows top-to-bottom (PDF Y=0 is at the bottom of the page)
+            const sortedYs = [...byY.keys()].sort((a, b) => b - a);
+            for (const y of sortedYs) {
+                const rowItems = byY.get(y).sort((a, b) => a.x - b.x);
+                allLines.push(rowItems.map(i => i.str).join('\t'));
+            }
         }
-        return pages.join('\n');
+
+        return allLines.join('\n');
     } catch (_) { return ''; }
 }
 
@@ -558,7 +611,7 @@ function toLines(text) {
     return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 }
 
-// Find all lines that contain any alias (case-insensitive); return index + line
+// Find all lines that contain any alias (case-insensitive); return indices
 function findAliasLines(lines, aliases) {
     const hits = [];
     for (let i = 0; i < lines.length; i++) {
@@ -570,18 +623,40 @@ function findAliasLines(lines, aliases) {
     return hits;
 }
 
-// Given the line where an alias was found, grab the value on that line (after
-// colon / equals / dash / tab) or from the next non-empty line if nothing follows.
-function valueFromLine(lines, idx) {
-    const line = lines[idx];
-    // Try to extract after a separator on the same line
-    const sep = line.match(/[:=\t]\s*(.+)$/);
-    if (sep && sep[1].trim().length > 1) return sep[1].trim();
-    // Try next line
-    for (let j = idx + 1; j < Math.min(idx + 3, lines.length); j++) {
-        const next = lines[j].trim();
-        if (next && next.length > 1) return next;
+// Returns true if a string looks like a field label (all-caps, short, no digits)
+function isLikelyLabel(text) {
+    return /^[A-Z][A-Z\s\/\(\)#?&']+$/.test(text) && text.length < 50;
+}
+
+// Extract value for a field from the line where its alias was found.
+// Primary strategy: split by tab, find the alias token, return the NEXT token.
+// This correctly handles table/grid PDFs where label and value sit in adjacent cells.
+// Fallback: look at the next 1-2 lines for a value.
+function valueFromLine(lines, idx, aliases) {
+    const line   = lines[idx];
+    const tokens = line.split('\t').map(t => t.trim()).filter(Boolean);
+
+    // Strategy 1: find which token matches the alias, return the next token
+    for (let t = 0; t < tokens.length - 1; t++) {
+        const tok = tokens[t].toLowerCase();
+        if (aliases.some(a => tok === a.toLowerCase() || tok.includes(a.toLowerCase()))) {
+            // Skip tokens that are themselves labels; keep scanning right
+            for (let v = t + 1; v < tokens.length; v++) {
+                const candidate = tokens[v];
+                if (candidate && !isLikelyLabel(candidate)) return candidate;
+                if (candidate && isLikelyLabel(candidate)) break; // hit next label, stop
+            }
+        }
     }
+
+    // Strategy 2: single-token line (the alias IS the whole line) → value on next line
+    if (tokens.length <= 1) {
+        for (let j = idx + 1; j < Math.min(idx + 3, lines.length); j++) {
+            const nextTokens = lines[j].split('\t').map(t => t.trim()).filter(Boolean);
+            if (nextTokens.length && !isLikelyLabel(nextTokens[0])) return nextTokens[0];
+        }
+    }
+
     return '';
 }
 
@@ -593,10 +668,11 @@ function parseCurrency(text) {
         const n = parseFloat(mil[1].replace(/,/g, ''));
         if (!isNaN(n)) return '$' + (n * 1_000_000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
-    const m = text.match(/\$\s*[\d,]+\.?\d{0,2}|[\d,]{4,}\.?\d{0,2}/);
+    // Match $-prefixed amounts, or bare numbers with commas (e.g. 764,470.00)
+    const m = text.match(/\$\s*[\d,]+\.?\d{0,2}|(?<!\d)[\d]{1,3}(?:,\d{3})+\.?\d{0,2}/);
     if (!m) return '';
     const n = parseFloat(m[0].replace(/[$,\s]/g, ''));
-    if (isNaN(n) || n === 0) return '';
+    if (isNaN(n) || n < 100) return ''; // ignore small numbers that are likely not dollar amounts
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
@@ -642,16 +718,28 @@ function parseBoolean(line, nextLine) {
     return '?';
 }
 
-// Scope percentage: look for a percentage near a scope keyword
+// Scope percentage: find scope name token, return the next token if it's a percent,
+// or scan the same line for a percentage pattern near the scope name.
 function findScopePercent(lines, scopeName) {
     const lowerScope = scopeName.toLowerCase();
-    for (let i = 0; i < lines.length; i++) {
-        const lower = lines[i].toLowerCase();
-        if (!lower.includes(lowerScope)) continue;
-        // Check this line and the next two for a percentage
-        for (let j = i; j < Math.min(i + 3, lines.length); j++) {
-            const pct = lines[j].match(/(\d+\.?\d*)\s*%/);
-            if (pct) return pct[1].includes('.') ? pct[1] + '%' : pct[1] + '%';
+    for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        if (!lowerLine.includes(lowerScope)) continue;
+
+        const tokens = line.split('\t').map(t => t.trim());
+        for (let i = 0; i < tokens.length; i++) {
+            if (!tokens[i].toLowerCase().includes(lowerScope)) continue;
+
+            // Check next 1-2 tokens for a percentage value
+            for (let j = i + 1; j < Math.min(i + 3, tokens.length); j++) {
+                const pct = tokens[j].match(/^(\d+\.?\d*)\s*%?$/);
+                if (pct) return pct[1] + '%';
+            }
+
+            // Fallback: scan rest of the line text for NN% pattern after the scope name
+            const afterScope = line.slice(line.toLowerCase().indexOf(lowerScope) + scopeName.length);
+            const inline = afterScope.match(/(\d+\.?\d*)\s*%/);
+            if (inline) return inline[1] + '%';
         }
     }
     return '';
@@ -667,7 +755,7 @@ function extractFields(text) {
         let value = '';
 
         for (const idx of hitIdxs) {
-            const raw = valueFromLine(lines, idx);
+            const raw = valueFromLine(lines, idx, config.aliases);
             if (!raw) continue;
 
             if (config.type === 'currency') {
