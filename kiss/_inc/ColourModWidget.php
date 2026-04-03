@@ -1,0 +1,20 @@
+
+<div id="ColourMod">
+<div id="cmDefault">
+	<div id="cmColorContainer" class="cmColorContainer"></div>
+	<div id="cmSatValBg" class="cmSatValBg"></div>
+	<div id="cmDefaultMiniOverlay" class="cmDefaultMiniOverlay"></div>
+	<div id="cmSatValContainer">
+		<div id="cmBlueDot" class="cmBlueDot"></div>
+	</div>
+	<div id="cmHueContainer">
+		<div id="cmBlueArrow" class="cmBlueArrow"></div>
+	</div>
+	<div id="cmClose">
+		<input type="text" name="cmHex" id="cmHex" value="FFFFFF" maxlength="6" size="9" /> <a href="http://www.deniseboubour.com" id="cmCloseButton" ><img src="/_inc/images/close.gif" border="0" alt="Close ColourMod" /></a>
+	</div>
+	<div style="display:none">
+		<input type="text" name="cmHue" id="cmHue" value="0" maxlength="3" />
+	</div>
+</div>
+</div>

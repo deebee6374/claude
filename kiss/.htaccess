@@ -1,0 +1,4 @@
+AuthType Basic
+AuthName "Authorized Users Only!"
+AuthUserFile "/home1/dboubour/.htpasswds/public_html/deniseboubour.com/kiss/passwd"
+require valid-user
